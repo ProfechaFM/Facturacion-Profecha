@@ -190,6 +190,15 @@ td.r{text-align:right}
 .venci .n{font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .venci .d{font-size:11px;color:var(--muted);margin-left:auto;white-space:nowrap}
 .venci .a{font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:600;white-space:nowrap}
+.aviso{background:var(--warn-soft);border:1px solid var(--warn);border-radius:var(--r);
+  padding:14px 16px;margin-bottom:22px}
+.aviso .at{font-weight:600;font-size:13.5px;color:var(--warn);margin-bottom:3px}
+.aviso .ad{font-size:12.5px;color:var(--ink2);margin-bottom:11px}
+.aviso .fila{display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:8px 0;
+  border-top:1px solid rgba(180,83,9,.22)}
+.aviso .fila .n{font-size:12.5px;font-weight:500}
+.aviso select{padding:6px 9px;border:1px solid var(--line);border-radius:4px;
+  background:var(--surface);font-size:12.5px;min-width:230px;margin-left:auto}
 footer{border-top:1px solid var(--line);margin-top:44px;padding:20px;text-align:center;
   font-size:12px;color:var(--muted)}
 footer b{color:var(--ink2);font-weight:600}
@@ -342,6 +351,8 @@ footer b{color:var(--ink2);font-weight:600}
   <section id="mod-inicio">
     <h2 id="saludo">Buenos días</h2>
     <p class="sub" id="sub-inicio">Resumen de compras y pagos.</p>
+
+    <div id="in-aviso"></div>
 
     <div class="kpis" id="in-kpis"></div>
 
@@ -685,7 +696,8 @@ async function validarLote(docs){
   const refs = docs.filter(d=>d.tipo==='NC' && d.refClave).map(d=>d.refClave);
   let facturasRef = {};
   if(refs.length){
-    const {data} = await sb.from('facturas').select('id,clave,numero_factura,monto').in('clave',refs);
+    const {data} = await sb.from('v_saldos')
+      .select('factura_id,clave,numero_factura,monto_original,saldo').in('clave',refs);
     (data||[]).forEach(f=>facturasRef[f.clave]=f);
   }
 
@@ -707,10 +719,14 @@ async function validarLote(docs){
     d.proveedor = PROVEEDORES.find(p=>p.cedula && p.cedula===d.emisorCedula) || null;
 
     if(d.tipo==='NC'){
-      d.facturaRef = d.refClave ? (facturasRef[d.refClave] || null) : null;
-      if(!d.facturaRef){
+      const ref = d.refClave ? (facturasRef[d.refClave] || null) : null;
+      if(ref && Number(ref.saldo) >= d.monto - 0.005){
+        d.facturaRef = ref;                       // hay saldo, se aplica ahí
+      } else if(ref){
+        d.facturaRef = null; d.refSinSaldo = ref; // la factura ya no la absorbe
+      } else {
         const enLote = docs.find(o=>o.clave===d.refClave && (o.tipo==='FE'||o.tipo==='TE'));
-        if(enLote) d.refEnLote = true;
+        if(enLote && enLote.monto >= d.monto - 0.005) d.refEnLote = true;
       }
     }
 
@@ -817,12 +833,19 @@ function detalle(d,i){
   }
   if(d.estado==='nc-huerfana'){
     const n=el('div','note warn');
-    n.textContent = 'Esta nota de crédito hace referencia a una factura que no está en el sistema. Si la aceptás, queda guardada sin aplicar y podés ligarla después.';
+    n.innerHTML = d.refSinSaldo
+      ? `La factura que corrige, la <b class="mono">${esc(d.refSinSaldo.numero_factura)}</b>, `+
+        `ya está pagada o no tiene saldo suficiente (le quedan ₡${money(d.refSinSaldo.saldo)}). `+
+        `Si la aceptás queda como crédito a favor y la aplicás a otra factura del mismo proveedor desde el inicio.`
+      : 'Esta nota de crédito hace referencia a una factura que no está en el sistema. '+
+        'Si la aceptás, queda guardada sin aplicar y podés ligarla después.';
     w.appendChild(n);
   }
   if(d.tipo==='NC' && d.facturaRef){
     const n=el('div','note nc');
-    n.innerHTML = `Se aplica a la factura <b class="mono">${esc(d.facturaRef.numero_factura)}</b> de ₡${money(d.facturaRef.monto)}. Saldo después del rebajo: <b>₡${money(round2(d.facturaRef.monto - d.monto))}</b>.`;
+    n.innerHTML = `Se aplica a la factura <b class="mono">${esc(d.facturaRef.numero_factura)}</b>, `+
+      `con saldo de ₡${money(d.facturaRef.saldo)}. Después del rebajo queda en `+
+      `<b>₡${money(round2(Number(d.facturaRef.saldo) - d.monto))}</b>.`;
     w.appendChild(n);
   }
   if(d.tipo==='NC' && d.refEnLote){
@@ -999,7 +1022,7 @@ async function aceptar(){
   // 2) Notas de crédito
   for(const d of sel.filter(x=>x.tipo==='NC')){
     try{
-      const facturaId = d.facturaRef ? d.facturaRef.id : (claveAId[d.refClave] ?? null);
+      const facturaId = d.facturaRef ? d.facturaRef.factura_id : (claveAId[d.refClave] ?? null);
       const {data,error} = await sb.from('notas_credito').insert({
         clave:d.clave, consecutivo:d.consecutivo, proveedor_id:d.proveedor.id,
         factura_id:facturaId, clave_referencia:d.refClave,
@@ -1595,8 +1618,14 @@ async function abrirPagos(){
 let PV = { resumen:{}, abierto:null };
 
 async function abrirProveedores(){
-  const {data} = await sb.from('v_proveedor_resumen').select('*');
-  PV.resumen = {}; (data||[]).forEach(r => PV.resumen[r.id] = r);
+  const [res, cred] = await Promise.all([
+    sb.from('v_proveedor_resumen').select('*'),
+    sb.from('v_credito_proveedor').select('*')
+  ]);
+  PV.resumen = {}; (res.data||[]).forEach(r => PV.resumen[r.id] = r);
+  (cred.data||[]).forEach(c => {
+    PV.resumen[c.proveedor_id] = Object.assign(PV.resumen[c.proveedor_id]||{}, {credito:c.credito});
+  });
   pintarProveedores();
 }
 
@@ -1629,7 +1658,8 @@ function pintarProveedores(){
         <td>${p.condicion_default==='credito'
               ? `<span class="tag t-ok">Crédito ${p.plazo_credito}d</span>`
               : '<span class="tag t-mut">Contado</span>'}</td>
-        <td class="r num">${Number(r.saldo_pendiente||0)>0 ? money(r.saldo_pendiente) : '—'}</td>
+        <td class="r num">${Number(r.saldo_pendiente||0)>0 ? money(r.saldo_pendiente) : '—'}
+          ${Number(r.credito||0)>0 ? `<div class="delta d-dn">−${money(r.credito)} a favor</div>` : ''}</td>
         <td class="r num">${r.facturas_total||0}</td>
         <td class="num">${r.ultima_compra?fdate(r.ultima_compra):'—'}</td>
       </tr>${PV.abierto===p.id ? filaEdicion(p) : ''}`;}).join('')}</tbody>`;
@@ -1884,20 +1914,26 @@ async function cargarInicio(){
   const hoy = hoyISO();
   const en7 = new Date(Date.now() + 7*86400000).toISOString().slice(0,10);
 
-  const [saldos, pagos, compras] = await Promise.all([
+  const [saldos, pagos, compras, huerfanas, credito] = await Promise.all([
     sb.from('v_saldos').select('proveedor_id,proveedor,numero_factura,saldo,fecha_vencimiento')
       .eq('condicion','credito'),
     sb.from('pagos').select('fecha,documento,proveedores(nombre),pagos_facturas(monto_aplicado)')
       .order('id',{ascending:false}).limit(6),
     sb.from('facturas').select('fecha_emision,monto').eq('anulada',false)
-      .gte('fecha_emision', new Date(Date.now()-365*86400000).toISOString().slice(0,10))
+      .gte('fecha_emision', new Date(Date.now()-365*86400000).toISOString().slice(0,10)),
+    sb.from('v_nc_huerfanas').select('*').order('fecha_emision'),
+    sb.from('v_credito_proveedor').select('*')
   ]);
+
+  pintarHuerfanas(huerfanas.data || []);
 
   const pend = (saldos.data||[]).filter(f => Number(f.saldo) > 0.005);
   const vencido = pend.filter(f => f.fecha_vencimiento <= hoy);
   const total   = pend.reduce((a,f)=>a+Number(f.saldo),0);
   const tvenc   = vencido.reduce((a,f)=>a+Number(f.saldo),0);
   const provs   = new Set(pend.map(f=>f.proveedor_id)).size;
+  const tcred   = (credito.data||[]).reduce((a,c)=>a+Number(c.credito),0);
+  const ncred   = (credito.data||[]).reduce((a,c)=>a+Number(c.notas),0);
 
   $('#in-kpis').innerHTML = `
     <div class="kpi"><div class="k">Deuda total pendiente</div>
@@ -1914,7 +1950,11 @@ async function cargarInicio(){
       <div class="v">₡${money((compras.data||[])
           .filter(f=>f.fecha_emision.slice(0,7)===hoy.slice(0,7))
           .reduce((a,f)=>a+Number(f.monto),0))}</div>
-      <div class="s">${hoy.slice(0,7).split('-').reverse().join('/')}</div></div>`;
+      <div class="s">${hoy.slice(0,7).split('-').reverse().join('/')}</div></div>` +
+    (tcred > 0 ? `<div class="kpi"><div class="k">Crédito a favor</div>
+      <div class="v" style="color:var(--ok)">₡${money(tcred)}</div>
+      <div class="s">${ncred} nota${ncred===1?'':'s'} sin aplicar · ${
+        (credito.data||[]).length} proveedor${(credito.data||[]).length===1?'':'es'}</div></div>` : '');
 
   // Gráfica de barras por mes
   const meses = [];
@@ -1952,6 +1992,50 @@ async function cargarInicio(){
       <div class="a" style="margin-left:auto">₡${money(t)}</div>
       <div class="d">${fdate(p.fecha).slice(0,5)}</div></div>`;}).join('')
     : '<div class="empty" style="padding:26px;font-size:12.5px">Todavía no hay pagos.</div>';
+}
+
+/* ---------- Notas de crédito sin aplicar ---------- */
+// El disparador de la base liga sola la NC cuando entra su factura.
+// Acá quedan solo las que traen mal la referencia y hay que ligar a mano.
+function pintarHuerfanas(lista){
+  const c = $('#in-aviso');
+  if(!lista.length){ c.innerHTML = ''; return; }
+  c.innerHTML = `<div class="aviso">
+    <div class="at">${lista.length} nota${lista.length>1?'s':''} de crédito sin aplicar</div>
+    <div class="ad">Su factura original no está en el sistema o ya fue pagada, así que el rebajo
+      no se le está descontando a nadie. Asignalas a una factura pendiente del mismo proveedor.</div>
+    ${lista.map(n=>`<div class="fila" data-nc="${n.id}">
+      <div><div class="n">${esc(n.proveedor)} · ₡${money(n.monto)}</div>
+        <div class="dl">NC ${esc(n.numero_nc)} · ${fdate(n.fecha_emision)}${
+          n.razon?' · '+esc(n.razon):''}</div></div>
+      <select data-lignc="${n.id}" data-prov="${n.proveedor_id}">
+        <option value="">Cargando facturas…</option></select>
+    </div>`).join('')}</div>`;
+
+  lista.forEach(async n => {
+    const sel = c.querySelector(`[data-lignc="${n.id}"]`);
+    const {data} = await sb.from('v_saldos').select('factura_id,numero_factura,fecha_emision,saldo')
+      .eq('proveedor_id', n.proveedor_id).gte('saldo', Number(n.monto))
+      .order('fecha_emision',{ascending:false}).limit(60);
+    // Solo se ofrecen facturas con saldo suficiente: así nunca queda un saldo negativo
+    if(!data || !data.length){
+      sel.outerHTML = '<span class="dl" style="margin-left:auto;max-width:290px;text-align:right">'+
+        'Este proveedor no tiene ninguna factura pendiente que absorba el monto. '+
+        'Queda como crédito a favor hasta la próxima compra.</span>';
+      return;
+    }
+    sel.innerHTML = '<option value="">Elegí la factura…</option>' +
+      data.map(f=>`<option value="${f.factura_id}">${esc(f.numero_factura)} · `+
+        `${fdate(f.fecha_emision)} · ₡${money(f.saldo)}</option>`).join('');
+    sel.onchange = async () => {
+      if(!sel.value) return;
+      const {error} = await sb.from('notas_credito')
+        .update({factura_id: Number(sel.value)}).eq('id', n.id);
+      if(error) return toast('No se pudo ligar: '+error.message,'bad');
+      toast('Nota de crédito aplicada','ok');
+      cargarInicio();
+    };
+  });
 }
 
 /* ---------- Navegación entre módulos ---------- */
