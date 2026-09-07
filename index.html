@@ -199,6 +199,20 @@ td.r{text-align:right}
 .aviso .fila .n{font-size:12.5px;font-weight:500}
 .aviso select{padding:6px 9px;border:1px solid var(--line);border-radius:4px;
   background:var(--surface);font-size:12.5px;min-width:230px;margin-left:auto}
+/* ---------- Consultas ---------- */
+.cq-tabs{display:flex;gap:2px;background:var(--line2);padding:3px;border-radius:var(--r)}
+.cq-tabs button{background:none;border:0;padding:7px 16px;border-radius:4px;font-size:13px;color:var(--ink2)}
+.cq-tabs button[aria-current="true"]{background:var(--surface);color:var(--ink);font-weight:500;
+  box-shadow:0 1px 2px var(--sombra)}
+.cq-edit{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+.cq-acc{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.cq-acc .peligro{background:var(--bad-soft);color:var(--bad);border:1px solid var(--bad)}
+.cq-acc .peligro:hover{background:var(--bad);color:#fff}
+.mini-list{font-size:12.5px;margin-top:12px}
+.mini-list .h{font-size:11px;color:var(--muted);font-weight:600;margin-bottom:5px}
+.mini-list .r{display:flex;gap:9px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line2)}
+.mini-list .r:last-child{border-bottom:0}
+.mini-list .a{margin-left:auto;font-variant-numeric:tabular-nums}
 footer{border-top:1px solid var(--line);margin-top:44px;padding:20px;text-align:center;
   font-size:12px;color:var(--muted)}
 footer b{color:var(--ink2);font-weight:600}
@@ -340,6 +354,7 @@ footer b{color:var(--ink2);font-weight:600}
       <button data-mod="pagos">Pagos</button>
       <button data-mod="proveedores">Proveedores</button>
       <button data-mod="precios">Precios</button>
+      <button data-mod="consultas">Consultas</button>
     </nav>
     <div class="who">
       <button class="tema" id="btn-tema" title="Cambiar tema" aria-label="Cambiar tema"></button>
@@ -533,6 +548,35 @@ footer b{color:var(--ink2);font-weight:600}
         </select></div>
     </div>
     <div id="px-body"></div>
+  </section>
+
+  <section id="mod-consultas" class="hide">
+    <h2>Consultas</h2>
+    <p class="sub">Revisar, corregir o eliminar lo que ya se registró.</p>
+
+    <div class="filtro">
+      <div class="cq-tabs">
+        <button data-cq="facturas" aria-current="true">Facturas</button>
+        <button data-cq="pagos">Comprobantes</button>
+      </div>
+      <div><div class="dl">Buscar</div><input type="search" id="cq-q" placeholder="Número, referencia o proveedor"></div>
+      <div><div class="dl">Proveedor</div><select id="cq-prov"><option value="">Todos</option></select></div>
+      <div id="cq-estado-w"><div class="dl">Estado</div>
+        <select id="cq-estado">
+          <option value="pendientes">Con saldo pendiente</option>
+          <option value="pagadas">Saldadas</option>
+          <option value="contado">De contado</option>
+          <option value="todas">Todas</option>
+        </select></div>
+      <div><div class="dl">Periodo</div>
+        <select id="cq-per">
+          <option value="90">Últimos 3 meses</option>
+          <option value="180">Últimos 6 meses</option>
+          <option value="365">Último año</option>
+          <option value="0">Todo</option>
+        </select></div>
+    </div>
+    <div id="cq-body"></div>
   </section>
   </main>
 
@@ -2038,11 +2082,288 @@ function pintarHuerfanas(lista){
   });
 }
 
+
+/* ============================================================
+   MÓDULO: CONSULTAS
+   ============================================================ */
+let CQ = { vista:'facturas', datos:[], abierto:null };
+
+async function abrirConsultas(){
+  if(!$('#pg-cta').options.length) await cargarCuentas();   // el detalle de pagos reusa este select
+  $('#cq-prov').innerHTML = '<option value="">Todos</option>' +
+    PROVEEDORES.map(p=>`<option value="${p.id}">${p.id}  ${esc(p.nombre)}</option>`).join('');
+  cargarConsultas();
+}
+
+function desdeISO(dias){
+  if(!dias) return null;
+  return new Date(Date.now() - dias*86400000).toISOString().slice(0,10);
+}
+
+async function cargarConsultas(){
+  const cont = $('#cq-body');
+  cont.innerHTML = '<div class="empty">Cargando…</div>';
+  CQ.abierto = null;
+  const prov  = $('#cq-prov').value;
+  const desde = desdeISO(Number($('#cq-per').value));
+
+  if(CQ.vista === 'facturas'){
+    let q = sb.from('v_saldos').select('*');
+    if(prov)  q = q.eq('proveedor_id', Number(prov));
+    if(desde) q = q.gte('fecha_emision', desde);
+    const {data, error} = await q.order('fecha_emision',{ascending:false}).limit(400);
+    if(error){ cont.innerHTML = '<div class="empty">'+esc(error.message)+'</div>'; return; }
+    CQ.datos = data || [];
+  } else {
+    let q = sb.from('pagos').select('id,fecha,documento,observaciones,cuenta_id,proveedor_id,'+
+      'proveedores(nombre),cuentas_bancarias(banco,ultimos_digitos),'+
+      'pagos_facturas(id,monto_aplicado,facturas(id,numero_factura,fecha_emision))');
+    if(prov)  q = q.eq('proveedor_id', Number(prov));
+    if(desde) q = q.gte('fecha', desde);
+    const {data, error} = await q.order('fecha',{ascending:false}).order('id',{ascending:false}).limit(300);
+    if(error){ cont.innerHTML = '<div class="empty">'+esc(error.message)+'</div>'; return; }
+    CQ.datos = data || [];
+  }
+  pintarConsultas();
+}
+
+function pintarConsultas(){
+  const cont = $('#cq-body');
+  const q = $('#cq-q').value.trim().toLowerCase();
+  const est = $('#cq-estado').value;
+
+  let lista = CQ.datos.slice();
+  if(CQ.vista === 'facturas'){
+    if(est === 'pendientes')   lista = lista.filter(f => Number(f.saldo) > 0.005 && f.condicion==='credito');
+    else if(est === 'pagadas') lista = lista.filter(f => Number(f.saldo) <= 0.005 && f.condicion==='credito');
+    else if(est === 'contado') lista = lista.filter(f => f.condicion === 'contado');
+    if(q) lista = lista.filter(f => (f.numero_factura||'').includes(q) ||
+                                    (f.proveedor||'').toLowerCase().includes(q));
+  } else {
+    if(q) lista = lista.filter(p => (p.documento||'').toLowerCase().includes(q) ||
+                                    (p.proveedores?.nombre||'').toLowerCase().includes(q));
+  }
+
+  if(!lista.length){ cont.innerHTML = '<div class="empty">Nada coincide con esos filtros.</div>'; return; }
+
+  const box = el('div','tbl');
+  const t = el('table','dtable');
+  t.innerHTML = CQ.vista === 'facturas' ? tablaFacturas(lista) : tablaPagos(lista);
+  box.appendChild(t); cont.innerHTML=''; cont.appendChild(box);
+
+  t.querySelectorAll('[data-cqr]').forEach(tr => tr.onclick = e => {
+    if(e.target.closest('input,select,button,textarea')) return;
+    const id = tr.dataset.cqr;
+    CQ.abierto = CQ.abierto === id ? null : id;
+    pintarConsultas();
+  });
+  conectarAcciones(t);
+}
+
+function tablaFacturas(lista){
+  return `<thead><tr>
+      <th style="width:118px">Factura</th><th>Proveedor</th>
+      <th style="width:92px">Fecha</th><th style="width:110px">Condición</th>
+      <th style="width:92px">Vence</th>
+      <th class="r" style="width:116px">Monto</th><th class="r" style="width:116px">Saldo</th>
+      <th style="width:26px"></th>
+    </tr></thead><tbody>${lista.map(f=>{
+      const saldado = Number(f.saldo) <= 0.005;
+      const id = 'f'+f.factura_id;
+      return `<tr class="cl ${CQ.abierto===id?'on':''}" data-cqr="${id}">
+        <td class="mono">${esc(f.numero_factura)}</td>
+        <td>${esc(f.proveedor)}</td>
+        <td class="num">${fdate(f.fecha_emision)}</td>
+        <td>${f.condicion==='credito'
+              ? `<span class="tag t-ok">Crédito ${f.plazo_aplicado}d</span>`
+              : '<span class="tag t-mut">Contado</span>'}</td>
+        <td class="num">${fdate(f.fecha_vencimiento)}</td>
+        <td class="r num">${money(f.monto_original)}
+          ${Number(f.total_nc)>0?`<div class="rebajo">−${money(f.total_nc)} NC</div>`:''}</td>
+        <td class="r num">${saldado?'<span class="tag t-ok">Saldada</span>':money(f.saldo)}</td>
+        <td class="chev">${CQ.abierto===id?'▲':'▼'}</td>
+      </tr>${CQ.abierto===id ? detalleFactura(f) : ''}`;}).join('')}</tbody>`;
+}
+
+function detalleFactura(f){
+  return `<tr class="detail"><td colspan="8"><div class="dwrap">
+    <div class="note warn" style="margin:0">Solo se puede cambiar la condición de pago.
+      Proveedor, número, fecha y monto vienen del XML del proveedor y no se editan.</div>
+    <div class="cq-edit">
+      <div class="fld"><label>Condición</label>
+        <select id="cf-cond">
+          <option value="credito"${f.condicion==='credito'?' selected':''}>Crédito</option>
+          <option value="contado"${f.condicion==='contado'?' selected':''}>Contado</option>
+        </select></div>
+      <div class="fld"><label>Plazo (días)</label>
+        <input id="cf-pla" type="number" min="0" max="180" value="${f.plazo_aplicado??''}"></div>
+      <div><div class="dl">Monto original</div><div class="dv num">₡${money(f.monto_original)}</div></div>
+      <div><div class="dl">Notas de crédito</div><div class="dv num">₡${money(f.total_nc)}</div></div>
+      <div><div class="dl">Pagado</div><div class="dv num">₡${money(f.total_pagado)}</div></div>
+      <div><div class="dl">Saldo</div><div class="dv num" style="font-weight:600">₡${money(f.saldo)}</div></div>
+    </div>
+    <div class="cq-acc">
+      <button class="btn btn-p btn-sm" data-gf="${f.factura_id}">Guardar cambios</button>
+      <button class="btn btn-sm peligro" data-df="${f.factura_id}">Eliminar factura</button>
+      <span class="dl" style="margin-left:auto">Clave <span class="mono">${esc((f.clave||'').slice(0,24))}…</span></span>
+    </div>
+    <div id="cf-rel"></div>
+  </div></td></tr>`;
+}
+
+function tablaPagos(lista){
+  return `<thead><tr>
+      <th style="width:92px">Fecha</th><th>Proveedor</th>
+      <th style="width:140px">Referencia</th><th style="width:150px">Cuenta</th>
+      <th class="r" style="width:76px">Facturas</th><th class="r" style="width:126px">Monto</th>
+      <th style="width:26px"></th>
+    </tr></thead><tbody>${lista.map(p=>{
+      const tot = (p.pagos_facturas||[]).reduce((a,x)=>a+Number(x.monto_aplicado),0);
+      const id = 'p'+p.id;
+      return `<tr class="cl ${CQ.abierto===id?'on':''}" data-cqr="${id}">
+        <td class="num">${fdate(p.fecha)}</td>
+        <td>${esc(p.proveedores?.nombre||'—')}</td>
+        <td class="mono">${esc(p.documento||'—')}</td>
+        <td>${p.cuentas_bancarias
+              ? esc(p.cuentas_bancarias.banco)+' ···'+esc(p.cuentas_bancarias.ultimos_digitos) : '—'}</td>
+        <td class="r num">${(p.pagos_facturas||[]).length}</td>
+        <td class="r num">${money(tot)}</td>
+        <td class="chev">${CQ.abierto===id?'▲':'▼'}</td>
+      </tr>${CQ.abierto===id ? detallePago(p) : ''}`;}).join('')}</tbody>`;
+}
+
+function detallePago(p){
+  const cuentas = $('#pg-cta') ? $('#pg-cta').innerHTML : '';
+  return `<tr class="detail"><td colspan="7"><div class="dwrap">
+    <div class="cq-edit">
+      <div class="fld"><label>Fecha</label><input type="date" id="cp-fec" value="${esc(p.fecha)}"></div>
+      <div class="fld"><label>Documento (referencia)</label><input id="cp-doc" value="${esc(p.documento||'')}"></div>
+      <div class="fld"><label>Cuenta</label><select id="cp-cta">${cuentas}</select></div>
+      <div class="fld" style="grid-column:span 2"><label>Observaciones</label>
+        <input id="cp-obs" value="${esc(p.observaciones||'')}"></div>
+    </div>
+    <div class="cq-acc">
+      <button class="btn btn-p btn-sm" data-gp="${p.id}" data-cta="${p.cuenta_id||''}">Guardar cambios</button>
+      <button class="btn btn-sm peligro" data-dp="${p.id}">Anular comprobante</button>
+      <span class="dl" style="margin-left:auto">Anular devuelve las facturas al flujo.</span>
+    </div>
+    <div class="mini-list">
+      <div class="h">Facturas cubiertas por este pago</div>
+      ${(p.pagos_facturas||[]).map(x=>`<div class="r">
+        <span class="mono">${esc(x.facturas?.numero_factura||'—')}</span>
+        <span class="dl">${x.facturas?fdate(x.facturas.fecha_emision):''}</span>
+        <span class="a">₡${money(x.monto_aplicado)}</span></div>`).join('')}
+    </div>
+  </div></td></tr>`;
+}
+
+/* ---------- Acciones ---------- */
+function conectarAcciones(t){
+  const gf = t.querySelector('[data-gf]');
+  if(gf) gf.onclick = () => guardarFactura(+gf.dataset.gf);
+  const df = t.querySelector('[data-df]');
+  if(df) df.onclick = () => eliminarFactura(+df.dataset.df);
+  const gp = t.querySelector('[data-gp]');
+  if(gp){
+    if(gp.dataset.cta) $('#cp-cta').value = gp.dataset.cta;
+    gp.onclick = () => guardarPagoEditado(+gp.dataset.gp);
+  }
+  const dp = t.querySelector('[data-dp]');
+  if(dp) dp.onclick = () => anularPago(+dp.dataset.dp);
+  if(t.querySelector('#cf-rel')) cargarRelacionados();
+}
+
+async function cargarRelacionados(){
+  const id = Number(CQ.abierto.slice(1));
+  const [nc, pg] = await Promise.all([
+    sb.from('notas_credito').select('id,numero_nc,fecha_emision,monto,razon').eq('factura_id', id),
+    sb.from('pagos_facturas').select('monto_aplicado,pagos(fecha,documento)').eq('factura_id', id)
+  ]);
+  const c = $('#cf-rel'); if(!c) return;
+  let h = '';
+  if((nc.data||[]).length) h += `<div class="mini-list"><div class="h">Notas de crédito aplicadas</div>${
+    nc.data.map(n=>`<div class="r"><span class="mono">${esc(n.numero_nc)}</span>
+      <span class="dl">${fdate(n.fecha_emision)}${n.razon?' · '+esc(n.razon):''}</span>
+      <span class="a">−₡${money(n.monto)}</span>
+      <button class="mini" data-quitnc="${n.id}">Desligar</button></div>`).join('')}</div>`;
+  if((pg.data||[]).length) h += `<div class="mini-list"><div class="h">Pagos aplicados</div>${
+    pg.data.map(x=>`<div class="r"><span class="mono">${esc(x.pagos?.documento||'—')}</span>
+      <span class="dl">${x.pagos?fdate(x.pagos.fecha):''}</span>
+      <span class="a">₡${money(x.monto_aplicado)}</span></div>`).join('')}</div>`;
+  c.innerHTML = h;
+  c.querySelectorAll('[data-quitnc]').forEach(b => b.onclick = async () => {
+    if(!await confirmar('Desligar nota de crédito',
+      'La nota vuelve a quedar sin aplicar y el saldo de esta factura sube.','Desligar')) return;
+    const {error} = await sb.from('notas_credito').update({factura_id:null}).eq('id', b.dataset.quitnc);
+    if(error) return toast('No se pudo desligar: '+error.message,'bad');
+    toast('Nota desligada','ok'); cargarConsultas();
+  });
+}
+
+async function guardarFactura(id){
+  const cond = $('#cf-cond').value;
+  const pla  = $('#cf-pla').value === '' ? null : Number($('#cf-pla').value);
+  if(cond === 'credito' && !(pla > 0)) return toast('A crédito necesita plazo en días');
+  const {error} = await sb.from('facturas')
+    .update({condicion: cond, plazo_aplicado: cond==='credito' ? pla : null}).eq('id', id);
+  if(error) return toast('No se pudo guardar: '+error.message,'bad');
+  toast(cond==='credito' ? 'Pasada a crédito, ya entra al flujo' : 'Pasada a contado, sale del flujo','ok');
+  cargarConsultas();
+}
+
+async function eliminarFactura(id){
+  if(!await confirmar('Eliminar factura',
+    'Se borra junto con su detalle de artículos. Si tiene pagos o notas de crédito aplicadas, '+
+    'la base lo va a impedir: primero hay que anular el pago o desligar la nota.','Eliminar')) return;
+  const {error} = await sb.from('facturas').delete().eq('id', id);
+  if(error) return toast('No se puede eliminar: tiene pagos o notas ligadas.','bad');
+  toast('Factura eliminada','ok');
+  CQ.abierto = null; cargarConsultas();
+}
+
+async function guardarPagoEditado(id){
+  const fecha = $('#cp-fec').value;
+  if(!fecha) return toast('Falta la fecha');
+  const {error} = await sb.from('pagos').update({
+    fecha, documento: $('#cp-doc').value.trim() || null,
+    cuenta_id: $('#cp-cta').value ? Number($('#cp-cta').value) : null,
+    observaciones: $('#cp-obs').value.trim() || null
+  }).eq('id', id);
+  if(error) return toast('No se pudo guardar: '+error.message,'bad');
+  toast('Comprobante actualizado','ok'); cargarConsultas();
+}
+
+async function anularPago(id){
+  if(!await confirmar('Anular comprobante',
+    'Las facturas cubiertas por este pago vuelven a quedar pendientes y saldrán otra vez en el flujo.',
+    'Anular')) return;
+  const {error} = await sb.from('pagos').delete().eq('id', id);
+  if(error) return toast('No se pudo anular: '+error.message,'bad');
+  toast('Comprobante anulado','ok');
+  CQ.abierto = null; cargarConsultas();
+}
+
+/* ---------- Eventos ---------- */
+document.querySelectorAll('[data-cq]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-cq]').forEach(x => x.setAttribute('aria-current','false'));
+  b.setAttribute('aria-current','true');
+  CQ.vista = b.dataset.cq;
+  $('#cq-estado-w').classList.toggle('hide', CQ.vista !== 'facturas');
+  $('#cq-q').placeholder = CQ.vista === 'facturas'
+    ? 'Número de factura o proveedor' : 'Referencia o proveedor';
+  cargarConsultas();
+});
+$('#cq-q').addEventListener('input', () => { clearTimeout(CQ.t); CQ.t = setTimeout(pintarConsultas, 250); });
+$('#cq-estado').addEventListener('change', pintarConsultas);
+$('#cq-prov').addEventListener('change', cargarConsultas);
+$('#cq-per').addEventListener('change', cargarConsultas);
+
 /* ---------- Navegación entre módulos ---------- */
 
 
 
-const MODULOS = ['inicio','recepcion','flujo','pagos','proveedores','precios'];
+
+const MODULOS = ['inicio','recepcion','flujo','pagos','proveedores','precios','consultas'];
 function irA(m){
   document.querySelectorAll('[data-mod]').forEach(x =>
     x.setAttribute('aria-current', x.dataset.mod === m ? 'true' : 'false'));
@@ -2052,6 +2373,7 @@ function irA(m){
   if(m === 'pagos')       abrirPagos();
   if(m === 'proveedores') abrirProveedores();
   if(m === 'precios')     llenarSelectProveedores();
+  if(m === 'consultas')   abrirConsultas();
 }
 document.querySelectorAll('[data-mod]').forEach(b => b.onclick = () => irA(b.dataset.mod));
 
