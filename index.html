@@ -213,6 +213,13 @@ td.r{text-align:right}
 .mini-list .r{display:flex;gap:9px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line2)}
 .mini-list .r:last-child{border-bottom:0}
 .mini-list .a{margin-left:auto;font-variant-numeric:tabular-nums}
+.bi-op{font-size:10.5px;padding:2px 7px;border-radius:3px;font-weight:600;white-space:nowrap}
+.bi-INSERT{background:var(--ok-soft);color:var(--ok)}
+.bi-UPDATE{background:var(--warn-soft);color:var(--warn)}
+.bi-DELETE{background:var(--bad-soft);color:var(--bad)}
+.bi-camb{font-size:12px;margin-top:3px;color:var(--ink2)}
+.bi-camb code{font-family:'IBM Plex Mono',monospace;font-size:11.5px;background:var(--line2);
+  padding:1px 5px;border-radius:3px}
 footer{border-top:1px solid var(--line);margin-top:44px;padding:20px;text-align:center;
   font-size:12px;color:var(--muted)}
 footer b{color:var(--ink2);font-weight:600}
@@ -558,6 +565,7 @@ footer b{color:var(--ink2);font-weight:600}
       <div class="cq-tabs">
         <button data-cq="facturas" aria-current="true">Facturas</button>
         <button data-cq="pagos">Comprobantes</button>
+        <button data-cq="bitacora">Bitácora</button>
       </div>
       <div><div class="dl">Buscar</div><input type="search" id="cq-q" placeholder="Número, referencia o proveedor"></div>
       <div><div class="dl">Proveedor</div><select id="cq-prov"><option value="">Todos</option></select></div>
@@ -568,6 +576,8 @@ footer b{color:var(--ink2);font-weight:600}
           <option value="contado">De contado</option>
           <option value="todas">Todas</option>
         </select></div>
+      <div id="cq-resp-w" class="hide" style="margin-left:auto">
+        <button class="btn btn-p btn-sm" id="cq-respaldo">Descargar respaldo</button></div>
       <div><div class="dl">Periodo</div>
         <select id="cq-per">
           <option value="90">Últimos 3 meses</option>
@@ -598,6 +608,7 @@ footer b{color:var(--ink2);font-weight:600}
 const SUPABASE_URL  = 'https://vbepvlcldcssqazpjtog.supabase.co';
 const SUPABASE_ANON  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZiZXB2bGNsZGNzc3FhenBqdG9nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzOTIzMTYsImV4cCI6MjEwMzk2ODMxNn0.55H7HNN87nNisrnNbPb2-kusSp2DIpLOB5gIPc3t7Fs';
 const CEDULA_PROPIA = '3101173484';   // Profecha S.A.
+const UMBRAL_PRECIO = 15;             // % de cambio que dispara la alerta de precio
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -671,6 +682,9 @@ function leerXML(nombreArchivo, contenido){
   const tipo = TIPOS[raiz];
   if(!tipo) return {archivo:nombreArchivo, error:'Tipo de documento no reconocido ('+raiz+')'};
   if(tipo === 'ND') return {archivo:nombreArchivo, error:'Las notas de débito todavía no se manejan'};
+  // En una factura de compra el emisor sos vos y el receptor es el proveedor:
+  // entraría con los roles invertidos.
+  if(tipo === 'FEC') return {archivo:nombreArchivo, error:'Es una factura electrónica de compra, emitida por Profecha'};
 
   const r = doc.documentElement;
   const d = {
@@ -745,6 +759,19 @@ async function validarLote(docs){
     (data||[]).forEach(f=>facturasRef[f.clave]=f);
   }
 
+  // Precios de referencia: último precio conocido de cada artículo por proveedor
+  const cedulas = docs.filter(d=>!d.error && d.emisorCedula).map(d=>d.emisorCedula);
+  const provIds = PROVEEDORES.filter(p=>p.cedula && cedulas.includes(p.cedula)).map(p=>p.id);
+  let refPrecios = {};
+  if(provIds.length){
+    const {data} = await sb.from('v_articulos')
+      .select('proveedor_id,codigo,detalle,precio_actual,ultima_compra')
+      .in('proveedor_id', provIds).limit(3000);
+    (data||[]).forEach(a => {
+      refPrecios[a.proveedor_id+'|'+(a.codigo||'')+'|'+a.detalle] = a;
+    });
+  }
+
   const vistas = new Set();
   for(const d of docs){
     if(d.error){ d.estado='error'; continue; }
@@ -781,6 +808,21 @@ async function validarLote(docs){
     d.plazo     = d.condicion==='credito' ? d.proveedor.plazo_credito : null;
     d.estado    = (d.tipo==='NC' && !d.facturaRef && !d.refEnLote) ? 'nc-huerfana' : 'listo';
     d.seleccion = true;
+
+    // Comparar cada línea contra el último precio pagado a ese proveedor
+    d.alertas = [];
+    if(d.tipo !== 'NC'){
+      d.lineas.forEach(L => {
+        const r = refPrecios[d.proveedor.id+'|'+(L.codigo_comercial||'')+'|'+L.detalle];
+        if(!r || !Number(r.precio_actual) || !Number(L.precio_unitario)) return;
+        const pct = (Number(L.precio_unitario) - Number(r.precio_actual)) / Number(r.precio_actual) * 100;
+        if(Math.abs(pct) >= UMBRAL_PRECIO){
+          d.alertas.push({detalle:L.detalle, antes:Number(r.precio_actual),
+                          ahora:Number(L.precio_unitario), pct, desde:r.ultima_compra});
+          L._alerta = pct;
+        }
+      });
+    }
   }
   return docs;
 }
@@ -814,6 +856,8 @@ function pintar(){
   if(c.duplicado)        pill(`<b>${c.duplicado}</b> duplicados`);
   if(c.ajeno||c.error)   pill(`<b>${(c.ajeno||0)+(c.error||0)}</b> descartados`,'bad');
   if(nc)                 pill(`<b>${nc}</b> notas de crédito`);
+  const nAl = LOTE.reduce((a,d)=>a+((d.alertas&&d.alertas.length)||0),0);
+  if(nAl)                pill(`<b>${nAl}</b> cambios de precio`,'warn');
 
   const sel = LOTE.filter(d=>d.seleccion).length;
   $('#btn-accept').textContent = sel ? `Aceptar ${sel} documento${sel>1?'s':''}` : 'Aceptar seleccionados';
@@ -827,7 +871,8 @@ function pintar(){
     const tr = el('tr','row'+(ABIERTO===i?' open':''));
     tr.innerHTML = `
       <td>${seleccionable ? `<input type="checkbox" class="chk" data-sel="${i}" ${d.seleccion?'checked':''}>` : ''}</td>
-      <td><span class="tag ${cls}">${lbl}</span>${d.tipo==='NC'?' <span class="tag t-nc">NC</span>':''}</td>
+      <td><span class="tag ${cls}">${lbl}</span>${d.tipo==='NC'?' <span class="tag t-nc">NC</span>':''}${
+           d.alertas && d.alertas.length ? ` <span class="tag t-warn" title="Cambios de precio">₡ ${d.alertas.length}</span>` : ''}</td>
       <td><div class="prov">${esc(d.proveedor ? d.proveedor.nombre : (d.emisorNombre || d.archivo))}</div>
           ${d.emisorCedula?`<div class="ced mono">${esc(d.emisorCedula)}</div>`:''}</td>
       <td class="num">${fdate(d.fecha)}</td>
@@ -949,6 +994,21 @@ function detalle(d,i){
     n.appendChild(fila); w.appendChild(n);
   }
 
+  // Cambios de precio contra la compra anterior
+  if(d.alertas && d.alertas.length){
+    const n=el('div','note warn');
+    n.innerHTML = `<b>${d.alertas.length} artículo${d.alertas.length>1?'s cambiaron':' cambió'} de precio `+
+      `más de ${UMBRAL_PRECIO}%</b> respecto a la última compra a este proveedor.` +
+      d.alertas.slice(0,8).map(a=>`<div style="margin-top:6px;display:flex;gap:8px;align-items:baseline">
+        <span style="flex:1">${esc(a.detalle)}</span>
+        <span class="num" style="color:var(--muted)">₡${money(a.antes)}</span>
+        <span>→</span><span class="num">₡${money(a.ahora)}</span>
+        <span class="delta ${a.pct>0?'d-up':'d-dn'}">${a.pct>0?'+':''}${a.pct.toFixed(1)}%</span>
+      </div>`).join('') +
+      (d.alertas.length>8 ? `<div style="margin-top:6px">y ${d.alertas.length-8} más…</div>` : '');
+    w.appendChild(n);
+  }
+
   // Artículos
   if(d.lineas && d.lineas.length){
     const s=el('div');
@@ -959,13 +1019,14 @@ function detalle(d,i){
         <th class="r" style="width:74px">Cant.</th><th style="width:52px">Unid.</th>
         <th class="r" style="width:96px">P. unit.</th><th class="r" style="width:104px">Total</th>
       </tr></thead><tbody>${
-      d.lineas.map(L=>`<tr>
+      d.lineas.map(L=>`<tr${L._alerta!==undefined?' style="background:var(--warn-soft)"':''}>
         <td class="num">${L.numero_linea??''}</td>
         <td class="mono">${esc(L.codigo_comercial||'—')}</td>
         <td>${esc(L.detalle||'')}</td>
         <td class="r num">${L.cantidad??''}</td>
         <td>${esc(L.unidad_medida||'')}</td>
-        <td class="r num">${money(L.precio_unitario)}</td>
+        <td class="r num">${money(L.precio_unitario)}${L._alerta!==undefined
+              ? ` <span class="delta ${L._alerta>0?'d-up':'d-dn'}">${L._alerta>0?'+':''}${L._alerta.toFixed(0)}%</span>` : ''}</td>
         <td class="r num">${money(L.monto_total_linea)}</td>
       </tr>`).join('')}</tbody>`;
     s.appendChild(t); w.appendChild(s);
@@ -1057,7 +1118,11 @@ async function aceptar(){
       if(d.lineas.length){
         const {error:e2} = await sb.from('lineas_documento')
           .insert(d.lineas.map(L=>({...L, factura_id:data.id})));
-        if(e2) throw e2;
+        if(e2){                                  // no dejar la factura a medias
+          await sb.from('facturas').delete().eq('id', data.id);
+          delete claveAId[d.clave];
+          throw e2;
+        }
       }
       d.guardada = true; guardadas++;
     }catch(err){ fallos.push(`${d.numero}: ${err.message}`); }
@@ -1076,7 +1141,10 @@ async function aceptar(){
       if(d.lineas.length){
         const {error:e2} = await sb.from('lineas_documento')
           .insert(d.lineas.map(L=>({...L, nota_credito_id:data.id})));
-        if(e2) throw e2;
+        if(e2){
+          await sb.from('notas_credito').delete().eq('id', data.id);
+          throw e2;
+        }
       }
       d.guardada = true; guardadas++;
     }catch(err){ fallos.push(`NC ${d.numero}: ${err.message}`); }
@@ -1172,7 +1240,9 @@ async function cargarFlujo(){
   const cont = $('#flujo-body');
   cont.innerHTML = '<div class="empty">Cargando…</div>';
 
-  let q = sb.from('v_saldos').select('*').eq('condicion','credito');
+  // gt('saldo',0) es obligatorio: sin él la consulta trae todas las facturas
+  // históricas y Supabase corta en 1000 filas sin avisar.
+  let q = sb.from('v_saldos').select('*').eq('condicion','credito').gt('saldo', 0);
   if(VISTA === 'flujo') q = q.lte('fecha_vencimiento', corte);
   const [{data:saldos, error}, {data:manuales}] = await Promise.all([
     q.order('proveedor_id'),
@@ -1472,7 +1542,8 @@ async function elegirProveedor(id){
   $('#pg-nom').textContent = p.id + '  ' + p.nombre;
 
   const {data, error} = await sb.from('v_saldos').select('*')
-    .eq('proveedor_id', id).eq('condicion','credito').order('fecha_vencimiento');
+    .eq('proveedor_id', id).eq('condicion','credito').gt('saldo', 0)
+    .order('fecha_vencimiento');
   if(error){ toast('No se pudieron cargar las facturas: '+error.message,'bad'); return; }
   PG.facturas = (data||[]).filter(f => Number(f.saldo) > 0.005);
   $('#pg-meta').textContent = PG.facturas.length
@@ -1960,7 +2031,7 @@ async function cargarInicio(){
 
   const [saldos, pagos, compras, huerfanas, credito] = await Promise.all([
     sb.from('v_saldos').select('proveedor_id,proveedor,numero_factura,saldo,fecha_vencimiento')
-      .eq('condicion','credito'),
+      .eq('condicion','credito').gt('saldo', 0),
     sb.from('pagos').select('fecha,documento,proveedores(nombre),pagos_facturas(monto_aplicado)')
       .order('id',{ascending:false}).limit(6),
     sb.from('facturas').select('fecha_emision,monto').eq('anulada',false)
@@ -2114,6 +2185,12 @@ async function cargarConsultas(){
     const {data, error} = await q.order('fecha_emision',{ascending:false}).limit(400);
     if(error){ cont.innerHTML = '<div class="empty">'+esc(error.message)+'</div>'; return; }
     CQ.datos = data || [];
+  } else if(CQ.vista === 'bitacora'){
+    let q = sb.from('v_auditoria').select('*');
+    if(desde) q = q.gte('creado_en', desde);
+    const {data, error} = await q.order('creado_en',{ascending:false}).limit(300);
+    if(error){ cont.innerHTML = '<div class="empty">'+esc(error.message)+'</div>'; return; }
+    CQ.datos = data || [];
   } else {
     let q = sb.from('pagos').select('id,fecha,documento,observaciones,cuenta_id,proveedor_id,'+
       'proveedores(nombre),cuentas_bancarias(banco,ultimos_digitos),'+
@@ -2139,6 +2216,10 @@ function pintarConsultas(){
     else if(est === 'contado') lista = lista.filter(f => f.condicion === 'contado');
     if(q) lista = lista.filter(f => (f.numero_factura||'').includes(q) ||
                                     (f.proveedor||'').toLowerCase().includes(q));
+  } else if(CQ.vista === 'bitacora'){
+    if(q) lista = lista.filter(a => (a.entidad||'').toLowerCase().includes(q) ||
+                                    (a.usuario||'').toLowerCase().includes(q) ||
+                                    String(a.registro_id||'').includes(q));
   } else {
     if(q) lista = lista.filter(p => (p.documento||'').toLowerCase().includes(q) ||
                                     (p.proveedores?.nombre||'').toLowerCase().includes(q));
@@ -2148,7 +2229,8 @@ function pintarConsultas(){
 
   const box = el('div','tbl');
   const t = el('table','dtable');
-  t.innerHTML = CQ.vista === 'facturas' ? tablaFacturas(lista) : tablaPagos(lista);
+  t.innerHTML = CQ.vista === 'facturas' ? tablaFacturas(lista)
+              : CQ.vista === 'bitacora' ? tablaBitacora(lista) : tablaPagos(lista);
   box.appendChild(t); cont.innerHTML=''; cont.appendChild(box);
 
   t.querySelectorAll('[data-cqr]').forEach(tr => tr.onclick = e => {
@@ -2257,6 +2339,74 @@ function detallePago(p){
   </div></td></tr>`;
 }
 
+const OPS = {INSERT:'Creado', UPDATE:'Modificado', DELETE:'Eliminado'};
+const CAMPOS = {
+  condicion:'condición', plazo_aplicado:'plazo', plazo_credito:'plazo',
+  condicion_default:'condición por defecto', factura_id:'factura ligada',
+  monto_aplicado:'monto aplicado', cuenta_id:'cuenta', documento:'referencia',
+  fecha:'fecha', observaciones:'observaciones', activo:'estado', cedula:'cédula',
+  nombre:'nombre', anulada:'anulada', monto:'monto', pagado:'pagado'
+};
+const valorBit = v => (v===null||v===undefined) ? '—' : String(v).replace(/^"|"$/g,'');
+
+function tablaBitacora(lista){
+  return `<thead><tr>
+      <th style="width:140px">Cuándo</th><th style="width:150px">Qué</th>
+      <th style="width:96px">Acción</th><th>Detalle</th>
+      <th style="width:180px">Usuario</th>
+    </tr></thead><tbody>${lista.map(a=>{
+      let det = '—';
+      if(a.accion === 'UPDATE' && a.cambios){
+        det = Object.entries(a.cambios).map(([k,v])=>
+          `<div class="bi-camb">${esc(CAMPOS[k]||k)}: <code>${esc(valorBit(v[0]))}</code> → `+
+          `<code>${esc(valorBit(v[1]))}</code></div>`).join('');
+      } else if(a.accion === 'DELETE' && a.datos){
+        const d = a.datos;
+        det = `<div class="bi-camb">${esc(d.numero_factura||d.documento||d.nombre||d.concepto||('registro '+a.registro_id))}`+
+              `${d.monto?' · ₡'+money(d.monto):''}</div>`;
+      } else if(a.accion === 'INSERT'){
+        det = `<div class="bi-camb">registro ${a.registro_id}</div>`;
+      }
+      const f = new Date(a.creado_en);
+      return `<tr>
+        <td class="num" style="font-size:12px">${f.toLocaleDateString('es-CR')}<br>
+          <span class="dl">${f.toLocaleTimeString('es-CR',{hour:'2-digit',minute:'2-digit'})}</span></td>
+        <td>${esc(a.entidad)}</td>
+        <td><span class="bi-op bi-${a.accion}">${OPS[a.accion]||a.accion}</span></td>
+        <td>${det}</td>
+        <td style="font-size:12px;color:var(--muted)">${esc(a.usuario)}</td>
+      </tr>`;}).join('')}</tbody>`;
+}
+
+/* ---------- Respaldo completo ---------- */
+async function descargarRespaldo(){
+  const btn = $('#cq-respaldo'); btn.disabled = true; btn.textContent = 'Preparando…';
+  const TABLAS = ['proveedores','cuentas_bancarias','facturas','notas_credito',
+                  'lineas_documento','pagos','pagos_facturas','movimientos_manuales'];
+  try{
+    const wb = XLSX.utils.book_new();
+    for(const t of TABLAS){
+      let filas = [], desde = 0;
+      while(true){                                   // por páginas: Supabase corta en 1000
+        const {data, error} = await sb.from(t).select('*').range(desde, desde+999);
+        if(error) throw new Error(t+': '+error.message);
+        filas = filas.concat(data||[]);
+        if(!data || data.length < 1000) break;
+        desde += 1000;
+        btn.textContent = `Preparando… ${filas.length}`;
+      }
+      const ws = XLSX.utils.json_to_sheet(filas.length ? filas : [{sin_datos:''}]);
+      XLSX.utils.book_append_sheet(wb, ws, t.slice(0,31));
+    }
+    const f = hoyISO().split('-').reverse().join('_');
+    XLSX.writeFile(wb, `RESPALDO_PROFECHA_${f}.xlsx`);
+    toast('Respaldo descargado','ok');
+  }catch(e){
+    toast('No se pudo generar el respaldo: '+e.message,'bad');
+  }
+  btn.disabled = false; btn.textContent = 'Descargar respaldo';
+}
+
 /* ---------- Acciones ---------- */
 function conectarAcciones(t){
   const gf = t.querySelector('[data-gf]');
@@ -2349,14 +2499,16 @@ document.querySelectorAll('[data-cq]').forEach(b => b.onclick = () => {
   b.setAttribute('aria-current','true');
   CQ.vista = b.dataset.cq;
   $('#cq-estado-w').classList.toggle('hide', CQ.vista !== 'facturas');
-  $('#cq-q').placeholder = CQ.vista === 'facturas'
-    ? 'Número de factura o proveedor' : 'Referencia o proveedor';
+  $('#cq-resp-w').classList.toggle('hide', CQ.vista !== 'bitacora');
+  $('#cq-q').placeholder = CQ.vista === 'facturas' ? 'Número de factura o proveedor'
+    : CQ.vista === 'bitacora' ? 'Qué, quién o número de registro' : 'Referencia o proveedor';
   cargarConsultas();
 });
 $('#cq-q').addEventListener('input', () => { clearTimeout(CQ.t); CQ.t = setTimeout(pintarConsultas, 250); });
 $('#cq-estado').addEventListener('change', pintarConsultas);
 $('#cq-prov').addEventListener('change', cargarConsultas);
 $('#cq-per').addEventListener('change', cargarConsultas);
+$('#cq-respaldo').onclick = descargarRespaldo;
 
 /* ---------- Navegación entre módulos ---------- */
 
