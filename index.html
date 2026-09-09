@@ -285,7 +285,7 @@ footer b{color:var(--ink2);font-weight:600}
 .ptable tr.novence{color:var(--muted)}
 .apl{width:104px;padding:4px 7px;border:1px solid var(--line);border-radius:4px;text-align:right;
   font-variant-numeric:tabular-nums;background:var(--surface)}
-.apl.on{border-color:var(--ok);background:#fff;font-weight:600}
+.apl.on{border-color:var(--ok);background:var(--ok-soft);color:var(--ink);font-weight:600}
 .sumbar{display:flex;align-items:center;gap:14px;padding:13px 15px;border-top:1px solid var(--line);
   background:var(--surface2);flex-wrap:wrap}
 .sumbar .tot{margin-left:auto;font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
@@ -1117,7 +1117,7 @@ async function aceptar(){
       claveAId[d.clave] = data.id;
       if(d.lineas.length){
         const {error:e2} = await sb.from('lineas_documento')
-          .insert(d.lineas.map(L=>({...L, factura_id:data.id})));
+          .insert(d.lineas.map(({_alerta, ...L}) => ({...L, factura_id:data.id})));
         if(e2){                                  // no dejar la factura a medias
           await sb.from('facturas').delete().eq('id', data.id);
           delete claveAId[d.clave];
@@ -1140,7 +1140,7 @@ async function aceptar(){
       if(error) throw error;
       if(d.lineas.length){
         const {error:e2} = await sb.from('lineas_documento')
-          .insert(d.lineas.map(L=>({...L, nota_credito_id:data.id})));
+          .insert(d.lineas.map(({_alerta, ...L}) => ({...L, nota_credito_id:data.id})));
         if(e2){
           await sb.from('notas_credito').delete().eq('id', data.id);
           throw e2;
@@ -1668,10 +1668,10 @@ async function guardarPago(){
     pintarPagos(); return;
   }
 
-  // La fecha y la cuenta se quedan; la referencia y las observaciones se limpian
+  // La fecha y la cuenta se quedan; la referencia y las observaciones se limpian.
+  // El proveedor se suelta y el foco vuelve al buscador, para encadenar comprobantes.
   $('#pg-doc').value = ''; $('#pg-obs').value = '';
-  PG.aplicado = {};
-  await elegirProveedor(PG.proveedor.id);
+  limpiarProveedor();
   await cargarHistorial();
   toast(`Pago registrado · ₡${money(total)}`,'ok');
 }
@@ -2262,7 +2262,8 @@ function tablaFacturas(lista){
         <td class="num">${fdate(f.fecha_vencimiento)}</td>
         <td class="r num">${money(f.monto_original)}
           ${Number(f.total_nc)>0?`<div class="rebajo">−${money(f.total_nc)} NC</div>`:''}</td>
-        <td class="r num">${saldado?'<span class="tag t-ok">Saldada</span>':money(f.saldo)}</td>
+        <td class="r num">${f.condicion==='contado' ? '<span class="dl">no aplica</span>'
+              : (saldado ? '<span class="tag t-ok">Saldada</span>' : money(f.saldo))}</td>
         <td class="chev">${CQ.abierto===id?'▲':'▼'}</td>
       </tr>${CQ.abierto===id ? detalleFactura(f) : ''}`;}).join('')}</tbody>`;
 }
@@ -2282,7 +2283,8 @@ function detalleFactura(f){
       <div><div class="dl">Monto original</div><div class="dv num">₡${money(f.monto_original)}</div></div>
       <div><div class="dl">Notas de crédito</div><div class="dv num">₡${money(f.total_nc)}</div></div>
       <div><div class="dl">Pagado</div><div class="dv num">₡${money(f.total_pagado)}</div></div>
-      <div><div class="dl">Saldo</div><div class="dv num" style="font-weight:600">₡${money(f.saldo)}</div></div>
+      <div><div class="dl">Saldo</div><div class="dv num" style="font-weight:600">${
+        f.condicion==='contado' ? 'Ya saldada al comprar' : '₡'+money(f.saldo)}</div></div>
     </div>
     <div class="cq-acc">
       <button class="btn btn-p btn-sm" data-gf="${f.factura_id}">Guardar cambios</button>
