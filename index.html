@@ -185,6 +185,19 @@ td.r{text-align:right}
 .barras .f{background:var(--line2);border-radius:3px;position:relative;flex:1;display:flex;align-items:flex-end}
 .barras .v{background:var(--maize);border-radius:3px;width:100%;min-height:2px}
 .barras .m{font-size:10px;color:var(--muted);text-align:center}
+.hbars{display:flex;flex-direction:column;gap:11px}
+.hb{display:grid;grid-template-columns:1fr auto;gap:3px 12px;align-items:baseline}
+.hb .n{font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb .a{font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hb .t{grid-column:1/-1;height:6px;border-radius:3px;background:var(--line2);overflow:hidden}
+.hb .v{height:100%;border-radius:3px;background:var(--maize)}
+.hb .v.deuda{background:var(--ink2)}
+.hb .s{grid-column:1/-1;font-size:11px;color:var(--muted);margin-top:-1px}
+.panel-f{padding:11px 15px;border-top:1px solid var(--line2);font-size:11.5px;color:var(--ink2);
+  background:var(--surface2)}
+.panel-f b{font-weight:600}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+@media (max-width:860px){.cols2{grid-template-columns:1fr}}
 .venci .it{display:flex;gap:10px;align-items:baseline;padding:9px 14px;border-bottom:1px solid var(--line2)}
 .venci .it:last-child{border-bottom:0}
 .venci .n{font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -394,6 +407,19 @@ footer b{color:var(--ink2);font-weight:600}
           <div class="panel-h">Últimos pagos</div>
           <div class="venci" id="in-pagos"></div>
         </div>
+      </div>
+    </div>
+
+    <div class="cols2">
+      <div class="panel">
+        <div class="panel-h">Proveedores con más compras · último año</div>
+        <div class="panel-b"><div class="hbars" id="in-topprov"></div></div>
+        <div class="panel-f" id="in-conc"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h">Dónde está la deuda hoy</div>
+        <div class="panel-b"><div class="hbars" id="in-topdeuda"></div></div>
+        <div class="panel-f" id="in-deudaf"></div>
       </div>
     </div>
   </section>
@@ -2016,6 +2042,17 @@ const TARJETAS = [
   ['precios','Precios','Cómo se han movido los precios por artículo']
 ];
 
+// Lista de barras horizontales: nombre, barra proporcional y monto
+function barrasH(filas){
+  const tope = Math.max(...filas.map(f=>f.valor), 1);
+  return filas.map(f=>`<div class="hb">
+    <div class="n">${esc(f.nombre)}</div>
+    <div class="a">₡${money(f.valor)}</div>
+    <div class="t"><div class="v ${f.clase||''}" style="width:${Math.max(2, f.valor/tope*100)}%"></div></div>
+    ${f.sub?`<div class="s">${esc(f.sub)}</div>`:''}
+  </div>`).join('');
+}
+
 async function cargarInicio(){
   const h = new Date().getHours();
   $('#saludo').textContent =
@@ -2034,7 +2071,7 @@ async function cargarInicio(){
       .eq('condicion','credito').gt('saldo', 0),
     sb.from('pagos').select('fecha,documento,proveedores(nombre),pagos_facturas(monto_aplicado)')
       .order('id',{ascending:false}).limit(6),
-    sb.from('facturas').select('fecha_emision,monto').eq('anulada',false)
+    sb.from('facturas').select('fecha_emision,monto,proveedor_id').eq('anulada',false)
       .gte('fecha_emision', new Date(Date.now()-365*86400000).toISOString().slice(0,10)),
     sb.from('v_nc_huerfanas').select('*').order('fecha_emision'),
     sb.from('v_credito_proveedor').select('*')
@@ -2048,6 +2085,16 @@ async function cargarInicio(){
   const tvenc   = vencido.reduce((a,f)=>a+Number(f.saldo),0);
   const provs   = new Set(pend.map(f=>f.proveedor_id)).size;
   const tcred   = (credito.data||[]).reduce((a,c)=>a+Number(c.credito),0);
+
+  // Compras del mes actual y del anterior, para dar referencia a la cifra
+  const mesPrev = new Date(); mesPrev.setDate(1); mesPrev.setMonth(mesPrev.getMonth()-1);
+  const kPrev = mesPrev.toISOString().slice(0,7);
+  const nombreMesPrevio = mesPrev.toLocaleDateString('es-CR',{month:'long'});
+  const sumaMes = k => (compras.data||[])
+    .filter(f=>f.fecha_emision.slice(0,7)===k).reduce((a,f)=>a+Number(f.monto),0);
+  const mesActual = sumaMes(hoy.slice(0,7));
+  const mesAnterior = sumaMes(kPrev);
+  const varMes = mesAnterior > 0 ? (mesActual - mesAnterior) / mesAnterior * 100 : null;
   const ncred   = (credito.data||[]).reduce((a,c)=>a+Number(c.notas),0);
 
   $('#in-kpis').innerHTML = `
@@ -2062,10 +2109,10 @@ async function cargarInicio(){
                                  .reduce((a,f)=>a+Number(f.saldo),0))}</div>
       <div class="s">próximos 7 días</div></div>
     <div class="kpi"><div class="k">Compras del mes</div>
-      <div class="v">₡${money((compras.data||[])
-          .filter(f=>f.fecha_emision.slice(0,7)===hoy.slice(0,7))
-          .reduce((a,f)=>a+Number(f.monto),0))}</div>
-      <div class="s">${hoy.slice(0,7).split('-').reverse().join('/')}</div></div>` +
+      <div class="v">₡${money(mesActual)}</div>
+      <div class="s">${varMes===null
+          ? hoy.slice(0,7).split('-').reverse().join('/')
+          : `${varMes>0?'+':''}${varMes.toFixed(0)}% respecto a ${nombreMesPrevio}`}</div></div>` +
     (tcred > 0 ? `<div class="kpi"><div class="k">Crédito a favor</div>
       <div class="v" style="color:var(--ok)">₡${money(tcred)}</div>
       <div class="s">${ncred} nota${ncred===1?'':'s'} sin aplicar · ${
@@ -2098,6 +2145,52 @@ async function cargarInicio(){
       <div class="a" style="margin-left:auto">₡${money(f.saldo)}</div>
       <div class="d">${fdate(f.fecha_vencimiento).slice(0,5)}</div></div>`).join('')
     : '<div class="empty" style="padding:26px;font-size:12.5px">Nada vence en los próximos 7 días.</div>';
+
+  // Proveedores con más compras del último año
+  const porProv = {};
+  (compras.data||[]).forEach(f => {
+    if(!f.proveedor_id) return;
+    porProv[f.proveedor_id] = (porProv[f.proveedor_id] || 0) + Number(f.monto);
+  });
+  const nombreProv = id => (PROVEEDORES.find(p=>p.id===id)||{}).nombre || ('Proveedor '+id);
+  const topProv = Object.entries(porProv).map(([id,v]) => ({id:+id, v}))
+                        .sort((a,b)=>b.v-a.v);
+  const totalComprado = topProv.reduce((a,x)=>a+x.v, 0);
+
+  $('#in-topprov').innerHTML = topProv.length
+    ? barrasH(topProv.slice(0,8).map(x=>({
+        nombre: nombreProv(x.id), valor: x.v,
+        sub: totalComprado ? (x.v/totalComprado*100).toFixed(1)+'% del total comprado' : ''
+      })))
+    : '<div class="empty" style="padding:22px;font-size:12.5px">Todavía no hay compras registradas.</div>';
+
+  if(topProv.length >= 3 && totalComprado){
+    const tres = topProv.slice(0,3).reduce((a,x)=>a+x.v,0);
+    $('#in-conc').innerHTML = `Los <b>3</b> principales concentran <b>${
+      (tres/totalComprado*100).toFixed(0)}%</b> de las compras · ${
+      topProv.length} proveedores con movimiento`;
+  } else $('#in-conc').innerHTML = `${topProv.length} proveedor${topProv.length===1?'':'es'} con movimiento`;
+
+  // Dónde está la deuda hoy
+  const deudaProv = {};
+  pend.forEach(f => {
+    deudaProv[f.proveedor_id] = deudaProv[f.proveedor_id] || {n:f.proveedor, v:0, c:0};
+    deudaProv[f.proveedor_id].v += Number(f.saldo);
+    deudaProv[f.proveedor_id].c++;
+  });
+  const topDeuda = Object.values(deudaProv).sort((a,b)=>b.v-a.v);
+
+  $('#in-topdeuda').innerHTML = topDeuda.length
+    ? barrasH(topDeuda.slice(0,8).map(x=>({
+        nombre: x.n, valor: x.v, clase: 'deuda',
+        sub: `${x.c} factura${x.c===1?'':'s'} · ${total?(x.v/total*100).toFixed(1):0}% de la deuda`
+      })))
+    : '<div class="empty" style="padding:22px;font-size:12.5px">No hay deuda pendiente.</div>';
+
+  $('#in-deudaf').innerHTML = topDeuda.length
+    ? `El mayor es <b>${esc(topDeuda[0].n)}</b> con <b>₡${money(topDeuda[0].v)}</b>` +
+      (topDeuda.length > 8 ? ` · ${topDeuda.length-8} proveedores más no se muestran` : '')
+    : 'Todo al día';
 
   // Últimos pagos
   $('#in-pagos').innerHTML = (pagos.data||[]).length ? pagos.data.map(p=>{
