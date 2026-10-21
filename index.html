@@ -19,6 +19,10 @@
   --warn:#B45309; --warn-soft:#FDF0E2;
   --bad:#B42318; --bad-soft:#FDECEA;
   --r:6px;
+  --row:400px;                       /* fila con gráfico y lista apilada */
+  --row2:340px;                      /* filas de dos paneles parejos */
+  --s1:#B88000;                      /* compras — par validado para daltonismo */
+  --s2:#4687C8;                      /* pagos */
 }
 [data-theme="dark"]{
   --ink:#E4EAF0; --ink2:#A7B6C4; --muted:#74838F;
@@ -163,24 +167,35 @@ td.r{text-align:right}
 .hide{display:none!important}
 
 /* ---------- Inicio ---------- */
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:13px;margin-bottom:22px}
-.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 17px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:13px}
+.kpis:last-of-type{margin-bottom:22px}
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:480px){.kpis{grid-template-columns:1fr}}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:15px 17px;min-height:98px;display:flex;flex-direction:column;justify-content:center}
 .kpi .k{font-size:11.5px;color:var(--muted);margin-bottom:6px}
 .kpi .v{font-size:23px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .kpi .s{font-size:11.5px;color:var(--ink2);margin-top:3px}
 .kpi.alerta{border-color:var(--bad);background:var(--bad-soft)}
 .kpi.alerta .v{color:var(--bad)}
-.cols{display:grid;grid-template-columns:1fr 330px;gap:16px;align-items:start}
+.cols{display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:stretch;margin-bottom:16px}
+@media (min-width:981px){.cols{grid-auto-rows:var(--row)}}
 @media (max-width:980px){.cols{grid-template-columns:1fr}}
-.accesos{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin-bottom:22px}
-.acc{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;
-  text-align:left;cursor:pointer;transition:border-color .12s,transform .12s}
+.stack{display:flex;flex-direction:column;gap:16px;min-height:0}
+.stack>.panel{flex:1;min-height:0}
+.accesos{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:22px}
+@media (max-width:1100px){.accesos{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:620px){.accesos{grid-template-columns:repeat(2,1fr)}}
+.acc{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:15px;
+  text-align:left;cursor:pointer;transition:border-color .12s,transform .12s;
+  height:122px;display:flex;flex-direction:column}
 .acc:hover{border-color:var(--maize);transform:translateY(-1px)}
 .acc svg{width:22px;height:22px;stroke:var(--maize);fill:none;stroke-width:1.7;
   stroke-linecap:round;stroke-linejoin:round;margin-bottom:9px;display:block}
 .acc .t{font-weight:600;font-size:13.5px;margin-bottom:2px;color:var(--ink)}
-.acc .d{font-size:11.5px;color:var(--muted);line-height:1.35}
-.barras{display:flex;align-items:flex-end;gap:7px;height:132px;padding:0 2px}
+.acc .d{font-size:11.5px;color:var(--muted);line-height:1.35;
+  display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.barras{display:flex;align-items:flex-end;gap:7px;height:100%;min-height:120px;padding:0 2px}
 .barras .b{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:5px}
 .barras .f{background:var(--line2);border-radius:3px;position:relative;flex:1;display:flex;align-items:flex-end}
 .barras .v{background:var(--maize);border-radius:3px;width:100%;min-height:2px}
@@ -194,10 +209,12 @@ td.r{text-align:right}
 .hb .v.deuda{background:var(--ink2)}
 .hb .s{grid-column:1/-1;font-size:11px;color:var(--muted);margin-top:-1px}
 .panel-f{padding:11px 15px;border-top:1px solid var(--line2);font-size:11.5px;color:var(--ink2);
-  background:var(--surface2)}
+  background:var(--surface2);flex:0 0 auto}
 .panel-f b{font-weight:600}
-.cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;align-items:stretch}
+@media (min-width:861px){.cols2{grid-auto-rows:var(--row2)}}
 @media (max-width:860px){.cols2{grid-template-columns:1fr}}
+.venci{flex:1;min-height:0;overflow:auto}
 .venci .it{display:flex;gap:10px;align-items:baseline;padding:9px 14px;border-bottom:1px solid var(--line2)}
 .venci .it:last-child{border-bottom:0}
 .venci .n{font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -242,6 +259,46 @@ footer b{color:var(--ink2);font-weight:600}
 .tema svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;
   stroke-linecap:round;stroke-linejoin:round;display:block}
 
+/* ---------- Gráfico de líneas ---------- */
+.lc{width:100%;height:100%;display:block;overflow:visible}
+.lc .rej{stroke:var(--line2);stroke-width:1}
+.lc .eje{fill:var(--muted);font-size:10px}
+.lc .ln{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.lc .ar{opacity:.10}
+.lc .pt{stroke:var(--surface);stroke-width:2}
+.lc .cruz{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3}
+.lcwrap{position:relative;height:100%;min-height:150px}
+.leyenda{display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:var(--ink2)}
+.leyenda i{width:11px;height:11px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px}
+.tip{position:absolute;pointer-events:none;background:var(--bar);color:var(--bar-tx);
+  border-radius:5px;padding:7px 10px;font-size:11.5px;white-space:nowrap;z-index:5;
+  box-shadow:0 4px 14px var(--sombra);transform:translate(-50%,-115%)}
+.tip .t{font-weight:600;margin-bottom:3px}
+.tip .r{display:flex;gap:9px;align-items:center}
+.tip .r i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.tip .r b{margin-left:auto;font-variant-numeric:tabular-nums}
+
+/* ---------- Reportes ---------- */
+.rep{display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:stretch;margin-bottom:18px}
+@media (max-width:900px){.rep{grid-template-columns:1fr}}
+.rep-lista{overflow:auto;max-height:430px}
+.rep-i{padding:11px 15px;border-bottom:1px solid var(--line2);cursor:pointer;font-size:13px}
+.rep-i:last-child{border-bottom:0}
+.rep-i:hover{background:var(--hover)}
+.rep-i[aria-current="true"]{background:var(--maize-soft);box-shadow:inset 3px 0 0 var(--maize)}
+.rep-i .n{font-weight:500}
+.rep-i .d{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.35}
+.rep-par{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px}
+.rep-par input,.rep-par select{width:100%;padding:8px 10px;border:1px solid var(--line);
+  border-radius:4px;background:var(--surface)}
+.rep-nota{font-size:12.5px;color:var(--ink2);background:var(--surface2);border:1px solid var(--line);
+  border-radius:var(--r);padding:11px 13px;line-height:1.45}
+.rep-acc{display:flex;gap:8px;margin-top:14px;align-items:center;flex-wrap:wrap}
+.rep-cnt{margin-left:auto;font-size:12px;color:var(--muted)}
+.rtot td{font-weight:600;background:var(--surface2);border-top:1px solid var(--line)}
+.rbar{height:5px;border-radius:3px;background:var(--line2);overflow:hidden;margin-top:4px;min-width:60px}
+.rbar i{display:block;height:100%;background:var(--maize);border-radius:3px}
+
 /* ---------- Proveedores y precios ---------- */
 .filtro{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;
   background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
@@ -269,9 +326,13 @@ footer b{color:var(--ink2);font-weight:600}
 /* ---------- Pagos ---------- */
 .pcols{display:grid;grid-template-columns:1fr 330px;gap:16px;align-items:start}
 @media (max-width:980px){.pcols{grid-template-columns:1fr}}
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
-.panel-h{padding:12px 15px;border-bottom:1px solid var(--line);font-size:12px;font-weight:600;color:var(--ink2);background:var(--surface2)}
-.panel-b{padding:15px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  display:flex;flex-direction:column;min-height:0}
+.panel-h{padding:12px 15px;border-bottom:1px solid var(--line);font-size:12px;font-weight:600;
+  color:var(--ink2);background:var(--surface2);flex:0 0 auto;
+  display:flex;align-items:center;gap:10px}
+.panel-h .extra{margin-left:auto;font-weight:400;color:var(--muted);font-size:11.5px}
+.panel-b{padding:15px;flex:1;min-height:0;overflow:auto}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .fld label{display:block;font-size:11.5px;color:var(--ink2);margin-bottom:4px;font-weight:500}
 .fld input,.fld select,.fld textarea{width:100%;padding:8px 10px;border:1px solid var(--line);
@@ -375,6 +436,7 @@ footer b{color:var(--ink2);font-weight:600}
       <button data-mod="proveedores">Proveedores</button>
       <button data-mod="precios">Precios</button>
       <button data-mod="consultas">Consultas</button>
+      <button data-mod="reportes">Reportes</button>
     </nav>
     <div class="who">
       <button class="tema" id="btn-tema" title="Cambiar tema" aria-label="Cambiar tema"></button>
@@ -390,16 +452,22 @@ footer b{color:var(--ink2);font-weight:600}
     <div id="in-aviso"></div>
 
     <div class="kpis" id="in-kpis"></div>
+    <div class="kpis" id="in-kpis2"></div>
 
     <div class="accesos" id="in-accesos"></div>
 
     <div class="cols">
       <div class="panel">
-        <div class="panel-h">Compras por mes · últimos 12 meses</div>
-        <div class="panel-b"><div class="barras" id="in-barras"></div></div>
+        <div class="panel-h">Compras y pagos por día<span class="extra" id="in-diames"></span></div>
+        <div class="panel-b" style="overflow:hidden"><div class="lcwrap" id="in-dia"></div></div>
+        <div class="panel-f"><div class="leyenda">
+          <span><i style="background:var(--s1)"></i>Compras</span>
+          <span><i style="background:var(--s2)"></i>Pagos</span>
+          <span class="extra" id="in-diaf" style="margin-left:auto"></span>
+        </div></div>
       </div>
-      <div>
-        <div class="panel" style="margin-bottom:16px">
+      <div class="stack">
+        <div class="panel">
           <div class="panel-h">Vence esta semana</div>
           <div class="venci" id="in-vence"></div>
         </div>
@@ -412,7 +480,7 @@ footer b{color:var(--ink2);font-weight:600}
 
     <div class="cols2">
       <div class="panel">
-        <div class="panel-h">Proveedores con más compras · último año</div>
+        <div class="panel-h">Proveedores con más compras<span class="extra">último año</span></div>
         <div class="panel-b"><div class="hbars" id="in-topprov"></div></div>
         <div class="panel-f" id="in-conc"></div>
       </div>
@@ -420,6 +488,18 @@ footer b{color:var(--ink2);font-weight:600}
         <div class="panel-h">Dónde está la deuda hoy</div>
         <div class="panel-b"><div class="hbars" id="in-topdeuda"></div></div>
         <div class="panel-f" id="in-deudaf"></div>
+      </div>
+    </div>
+
+    <div class="cols2">
+      <div class="panel">
+        <div class="panel-h">Compras por mes<span class="extra">últimos 12 meses</span></div>
+        <div class="panel-b"><div class="barras" id="in-barras"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h">Antigüedad de la deuda<span class="extra">a hoy</span></div>
+        <div class="panel-b"><div class="hbars" id="in-aging"></div></div>
+        <div class="panel-f" id="in-agingf"></div>
       </div>
     </div>
   </section>
@@ -613,6 +693,39 @@ footer b{color:var(--ink2);font-weight:600}
         </select></div>
     </div>
     <div id="cq-body"></div>
+  </section>
+
+  <section id="mod-reportes" class="hide">
+    <h2>Reportes</h2>
+    <p class="sub">Elegí el reporte, definí el rango y ejecutalo. Todo se puede exportar a Excel.</p>
+
+    <div class="rep">
+      <div class="panel rep-lista">
+        <div class="panel-h">Tipo de reporte</div>
+        <div id="rep-tipos"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h">Parámetros<span class="extra" id="rep-nom"></span></div>
+        <div class="panel-b">
+          <div class="rep-par">
+            <div class="fld" id="rep-w1"><label for="rep-d1">Del</label><input type="date" id="rep-d1"></div>
+            <div class="fld" id="rep-w2"><label for="rep-d2">Al</label><input type="date" id="rep-d2"></div>
+            <div class="fld hide" id="rep-wp"><label for="rep-prov">Proveedor</label>
+              <select id="rep-prov"></select></div>
+            <div class="fld hide" id="rep-wb"><label for="rep-busca">Artículo contiene</label>
+              <input id="rep-busca" placeholder="Opcional"></div>
+          </div>
+          <div class="rep-nota" id="rep-desc"></div>
+          <div class="rep-acc">
+            <button class="btn btn-p" id="rep-run">Ejecutar</button>
+            <button class="btn btn-s" id="rep-xls" disabled>Exportar a Excel</button>
+            <span class="rep-cnt" id="rep-cnt"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="rep-out"></div>
   </section>
   </main>
 
@@ -1761,7 +1874,12 @@ let PV = { resumen:{}, abierto:null };
 async function abrirProveedores(){
   const [res, cred] = await Promise.all([
     sb.from('v_proveedor_resumen').select('*'),
-    sb.from('v_credito_proveedor').select('*')
+    sb.from('v_credito_proveedor').select('*'),
+    sb.from('v_pagos_dia').select('*').gte('fecha', hoy.slice(0,4)+'-01-01'),
+    sb.from('v_resumen_mensual').select('*'),
+    sb.from('notas_credito').select('fecha_emision,monto')
+      .gte('fecha_emision', hoy.slice(0,7)+'-01'),
+    sb.from('v_antiguedad').select('rango,saldo')
   ]);
   PV.resumen = {}; (res.data||[]).forEach(r => PV.resumen[r.id] = r);
   (cred.data||[]).forEach(c => {
@@ -2032,17 +2150,104 @@ const ICONOS = {
   flujo:'<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 3v3M16 3v3M7.5 14h5M7.5 17.2h8"/></svg>',
   pagos:'<svg viewBox="0 0 24 24"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M2.5 10h19M6 14.7h3.5"/></svg>',
   proveedores:'<svg viewBox="0 0 24 24"><path d="M9 11.2a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8z"/><path d="M2.6 20a6.4 6.4 0 0 1 12.8 0"/><path d="M16.5 4.8a3.2 3.2 0 0 1 0 6.3M18 14.4a6 6 0 0 1 3.4 5.6"/></svg>',
-  precios:'<svg viewBox="0 0 24 24"><path d="M3 17.5l5.4-5.6 3.6 3.4 4.2-5.1 4.8 4"/><path d="M3 21h18M3 3v18"/></svg>'
+  precios:'<svg viewBox="0 0 24 24"><path d="M3 17.5l5.4-5.6 3.6 3.4 4.2-5.1 4.8 4"/><path d="M3 21h18M3 3v18"/></svg>',
+  reportes:'<svg viewBox="0 0 24 24"><path d="M14.5 2.8H6.2A1.7 1.7 0 0 0 4.5 4.5v15A1.7 1.7 0 0 0 6.2 21.2h11.6a1.7 1.7 0 0 0 1.7-1.7V7.6z"/><path d="M14.3 2.8v5h5.2"/><path d="M8.6 17v-3.3M12 17v-5.6M15.4 17v-2"/></svg>'
 };
 const TARJETAS = [
   ['recepcion','Recepción','Cargar los XML de facturas y notas de crédito'],
   ['flujo','Flujo de pago','Armar y exportar lo que toca pagar'],
   ['pagos','Pagos','Registrar comprobantes y aplicar facturas'],
   ['proveedores','Proveedores','Plazos, condiciones y saldos'],
-  ['precios','Precios','Cómo se han movido los precios por artículo']
+  ['precios','Precios','Cómo se han movido los precios por artículo'],
+  ['reportes','Reportes','Análisis por proveedor, precios y antigüedad']
 ];
 
+
+/* ============================================================
+   GRÁFICO DE LÍNEAS
+   ============================================================ */
+// Dos series en un solo eje (ambas en colones), con leyenda, cruz y tooltip.
+const corto = n => {
+  n = Number(n) || 0;
+  const a = Math.abs(n);
+  if(a >= 1e6) return (n/1e6).toFixed(a >= 1e7 ? 0 : 1).replace('.', ',') + 'M';
+  if(a >= 1e3) return Math.round(n/1e3) + 'k';
+  return String(Math.round(n));
+};
+
+function graficoLineas(cont, labels, series){
+  cont.innerHTML = '';
+  if(!labels.length) return;
+  const W = Math.max(300, cont.clientWidth  || 640);
+  const H = Math.max(150, cont.clientHeight || 190);
+  const mL = 48, mR = 12, mT = 12, mB = 20;
+  const iw = W - mL - mR, ih = H - mT - mB;
+  const max = Math.max(1, ...series.flatMap(s => s.datos.map(v => Number(v) || 0)));
+  const paso = labels.length > 1 ? iw / (labels.length - 1) : 0;
+  const X = i => mL + i * paso;
+  const Y = v => mT + ih - (Number(v) || 0) / max * ih;
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('class', 'lc');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const el2 = (t, at) => { const e = document.createElementNS(ns, t);
+    for(const k in at) e.setAttribute(k, at[k]); return e; };
+
+  // Rejilla y eje: recesivos, cuatro marcas
+  for(let i = 0; i <= 4; i++){
+    const v = max * i / 4, y = Y(v);
+    svg.appendChild(el2('line', {class:'rej', x1:mL, x2:W-mR, y1:y, y2:y}));
+    const t = el2('text', {class:'eje', x:mL-7, y:y+3, 'text-anchor':'end'});
+    t.textContent = corto(v); svg.appendChild(t);
+  }
+  labels.forEach((l, i) => {
+    if(labels.length > 16 && i % Math.ceil(labels.length/12) !== 0 && i !== labels.length-1) return;
+    const t = el2('text', {class:'eje', x:X(i), y:H-5, 'text-anchor':'middle'});
+    t.textContent = l; svg.appendChild(t);
+  });
+
+  // Área y línea por serie
+  series.forEach(se => {
+    const pts = se.datos.map((v, i) => `${X(i)},${Y(v)}`).join(' ');
+    svg.appendChild(el2('polygon', {class:'ar', fill:se.color,
+      points:`${mL},${mT+ih} ${pts} ${X(se.datos.length-1)},${mT+ih}`}));
+    svg.appendChild(el2('polyline', {class:'ln', stroke:se.color, points:pts}));
+  });
+
+  const cruz = el2('line', {class:'cruz', y1:mT, y2:mT+ih, x1:-99, x2:-99});
+  svg.appendChild(cruz);
+  const marks = series.map(se => {
+    const c = el2('circle', {class:'pt', r:4.5, fill:se.color, cx:-99, cy:-99});
+    svg.appendChild(c); return c;
+  });
+
+  // Zonas transparentes para el hover: más anchas que la marca
+  const tip = el('div','tip'); tip.style.display = 'none';
+  labels.forEach((l, i) => {
+    const z = el2('rect', {x:X(i) - paso/2, y:mT, width:Math.max(paso, 8), height:ih,
+                           fill:'transparent'});
+    z.addEventListener('mouseenter', () => {
+      cruz.setAttribute('x1', X(i)); cruz.setAttribute('x2', X(i));
+      marks.forEach((c, k) => { c.setAttribute('cx', X(i)); c.setAttribute('cy', Y(series[k].datos[i])); });
+      tip.innerHTML = `<div class="t">${esc(l)}</div>` + series.map(se =>
+        `<div class="r"><i style="background:${se.color}"></i>${esc(se.n)}<b>₡${money(se.datos[i])}</b></div>`).join('');
+      tip.style.display = '';
+      tip.style.left = (X(i) / W * 100) + '%';
+      tip.style.top  = (Math.min(...series.map(se => Y(se.datos[i]))) / H * 100) + '%';
+    });
+    svg.appendChild(z);
+  });
+  svg.addEventListener('mouseleave', () => {
+    tip.style.display = 'none'; cruz.setAttribute('x1', -99); cruz.setAttribute('x2', -99);
+    marks.forEach(c => c.setAttribute('cx', -99));
+  });
+
+  cont.appendChild(svg); cont.appendChild(tip);
+}
+
 // Lista de barras horizontales: nombre, barra proporcional y monto
+
 function barrasH(filas){
   const tope = Math.max(...filas.map(f=>f.valor), 1);
   return filas.map(f=>`<div class="hb">
@@ -2066,7 +2271,7 @@ async function cargarInicio(){
   const hoy = hoyISO();
   const en7 = new Date(Date.now() + 7*86400000).toISOString().slice(0,10);
 
-  const [saldos, pagos, compras, huerfanas, credito] = await Promise.all([
+  const [saldos, pagos, compras, huerfanas, credito, pagosDia, resumen, ncMes, aging] = await Promise.all([
     sb.from('v_saldos').select('proveedor_id,proveedor,numero_factura,saldo,fecha_vencimiento')
       .eq('condicion','credito').gt('saldo', 0),
     sb.from('pagos').select('fecha,documento,proveedores(nombre),pagos_facturas(monto_aplicado)')
@@ -2117,6 +2322,69 @@ async function cargarInicio(){
       <div class="v" style="color:var(--ok)">₡${money(tcred)}</div>
       <div class="s">${ncred} nota${ncred===1?'':'s'} sin aplicar · ${
         (credito.data||[]).length} proveedor${(credito.data||[]).length===1?'':'es'}</div></div>` : '');
+
+  // ---- Segunda fila de indicadores ----
+  const mesK     = hoy.slice(0,7);
+  const pagosMes = (pagosDia.data||[])
+    .filter(x => x.fecha.slice(0,7) === mesK).reduce((a,x)=>a+Number(x.monto), 0);
+  const rMes     = (resumen.data||[]).find(r => r.mes === mesK) || {};
+  const totalNC  = (ncMes.data||[]).reduce((a,x)=>a+Number(x.monto), 0);
+
+  $('#in-kpis2').innerHTML = `
+    <div class="kpi"><div class="k">Pagado este mes</div>
+      <div class="v">₡${money(pagosMes)}</div>
+      <div class="s">${(pagosDia.data||[]).filter(x=>x.fecha.slice(0,7)===mesK)
+          .reduce((a,x)=>a+Number(x.comprobantes),0)} comprobantes</div></div>
+    <div class="kpi"><div class="k">IVA de compras del mes</div>
+      <div class="v">₡${money(rMes.impuesto || 0)}</div>
+      <div class="s">sobre ₡${money(rMes.subtotal || 0)} de subtotal</div></div>
+    <div class="kpi"><div class="k">Facturas del mes</div>
+      <div class="v">${rMes.facturas || 0}</div>
+      <div class="s">de ${rMes.proveedores || 0} proveedores</div></div>
+    <div class="kpi"><div class="k">Notas de crédito del mes</div>
+      <div class="v">₡${money(totalNC)}</div>
+      <div class="s">${(ncMes.data||[]).length} nota${(ncMes.data||[]).length===1?'':'s'}</div></div>`;
+
+  // ---- Compras y pagos por día del mes en curso ----
+  const diasMes = new Date(Number(hoy.slice(0,4)), Number(hoy.slice(5,7)), 0).getDate();
+  const cDia = Array(diasMes).fill(0), pDia = Array(diasMes).fill(0);
+  (compras.data||[]).forEach(f => {
+    if(f.fecha_emision.slice(0,7) === mesK) cDia[Number(f.fecha_emision.slice(8,10))-1] += Number(f.monto);
+  });
+  (pagosDia.data||[]).forEach(x => {
+    if(x.fecha.slice(0,7) === mesK) pDia[Number(x.fecha.slice(8,10))-1] += Number(x.monto);
+  });
+  const etiquetasDia = Array.from({length:diasMes}, (_,i) => String(i+1));
+  const css = getComputedStyle(document.documentElement);
+  DIARIO = { labels: etiquetasDia, series: [
+    {n:'Compras', color: css.getPropertyValue('--s1').trim(), datos: cDia},
+    {n:'Pagos',   color: css.getPropertyValue('--s2').trim(), datos: pDia}
+  ]};
+  $('#in-diames').textContent = new Date(hoy+'T12:00:00')
+    .toLocaleDateString('es-CR',{month:'long', year:'numeric'});
+  graficoLineas($('#in-dia'), DIARIO.labels, DIARIO.series);
+  $('#in-diaf').textContent =
+    `Compras ₡${money(cDia.reduce((a,b)=>a+b,0))} · Pagos ₡${money(pDia.reduce((a,b)=>a+b,0))}`;
+
+  // ---- Antigüedad de la deuda ----
+  const ORDEN = ['Por vencer','1 a 30','31 a 60','61 a 90','Más de 90'];
+  const porRango = {};
+  (aging.data||[]).forEach(x => { porRango[x.rango] = (porRango[x.rango]||0) + Number(x.saldo); });
+  const totAging = Object.values(porRango).reduce((a,b)=>a+b, 0);
+  $('#in-aging').innerHTML = totAging
+    ? barrasH(ORDEN.filter(r => porRango[r]).map(r => ({
+        nombre: r === 'Por vencer' ? r : r + ' días vencida',
+        valor: porRango[r],
+        clase: (r === 'Por vencer' || r === '1 a 30') ? '' : 'deuda',
+        sub: (porRango[r]/totAging*100).toFixed(1) + '% de la deuda'
+      })))
+    : '<div class="empty" style="padding:22px;font-size:12.5px">No hay deuda pendiente.</div>';
+  const viejo = (porRango['61 a 90']||0) + (porRango['Más de 90']||0);
+  $('#in-agingf').innerHTML = totAging
+    ? (viejo > 0
+       ? `<b>₡${money(viejo)}</b> lleva más de 60 días vencido`
+       : 'Nada pasa de 60 días vencido')
+    : 'Todo al día';
 
   // Gráfica de barras por mes
   const meses = [];
@@ -2605,12 +2873,332 @@ $('#cq-prov').addEventListener('change', cargarConsultas);
 $('#cq-per').addEventListener('change', cargarConsultas);
 $('#cq-respaldo').onclick = descargarRespaldo;
 
+
+/* ============================================================
+   MÓDULO: REPORTES
+   ============================================================ */
+// Cada reporte declara qué parámetros necesita y devuelve columnas, filas
+// y qué columnas se totalizan. El render y la exportación son comunes.
+let RP = { sel:null, res:null };
+
+const REPORTES = [
+  { id:'compras-prov', n:'Compras por proveedor',
+    d:'Cuánto le compraste a cada proveedor en el rango, con su IVA y lo que queda pendiente.',
+    fechas:true,
+    run: async (d1,d2) => {
+      const {data,error} = await sb.rpc('rpt_compras_proveedor',{d1,d2});
+      if(error) throw error;
+      return { cols:[
+        {k:'proveedor',t:'Proveedor'},
+        {k:'facturas',t:'Facturas',tipo:'n'},
+        {k:'subtotal',t:'Subtotal',tipo:'m'},
+        {k:'impuesto',t:'IVA',tipo:'m'},
+        {k:'total',t:'Total',tipo:'m',barra:true},
+        {k:'saldo',t:'Pendiente',tipo:'m'}],
+        filas:data||[], totales:['facturas','subtotal','impuesto','total','saldo'] };
+    }},
+
+  { id:'antiguedad', n:'Antigüedad de saldos',
+    d:'La deuda de hoy repartida por cuánto lleva vencida. Es el reporte que muestra si hay saldos envejeciendo sin que nadie los note. No usa rango de fechas.',
+    fechas:false,
+    run: async () => {
+      const {data,error} = await sb.rpc('rpt_antiguedad');
+      if(error) throw error;
+      return { cols:[
+        {k:'proveedor',t:'Proveedor'},
+        {k:'por_vencer',t:'Por vencer',tipo:'m'},
+        {k:'d_1_30',t:'1 a 30',tipo:'m'},
+        {k:'d_31_60',t:'31 a 60',tipo:'m'},
+        {k:'d_61_90',t:'61 a 90',tipo:'m'},
+        {k:'d_mas_90',t:'+ de 90',tipo:'m'},
+        {k:'total',t:'Total',tipo:'m',barra:true}],
+        filas:data||[], totales:['por_vencer','d_1_30','d_31_60','d_61_90','d_mas_90','total'] };
+    }},
+
+  { id:'cambios-precio', n:'Cambios de precio',
+    d:'Artículos cuyo precio se movió dentro del rango. Compara la primera compra contra la última y ordena por el cambio más grande.',
+    fechas:true, prov:'opcional',
+    run: async (d1,d2,prov) => {
+      const {data,error} = await sb.rpc('rpt_cambios_precio',{d1,d2,prov:prov||null});
+      if(error) throw error;
+      return { cols:[
+        {k:'detalle',t:'Artículo'},
+        {k:'proveedor',t:'Proveedor'},
+        {k:'compras',t:'Compras',tipo:'n'},
+        {k:'precio_ini',t:'Precio inicial',tipo:'m'},
+        {k:'precio_fin',t:'Precio actual',tipo:'m'},
+        {k:'variacion',t:'Cambio',tipo:'v'}],
+        filas:data||[], totales:[] };
+    }},
+
+  { id:'detalle-art', n:'Detalle de compras por artículo',
+    d:'Todas las líneas de factura del rango. Filtrá por proveedor o por texto del artículo, porque sin filtro son muchísimas líneas.',
+    fechas:true, prov:'opcional', busca:true,
+    run: async (d1,d2,prov,busca) => {
+      const {data,error} = await sb.rpc('rpt_detalle_articulos',
+        {d1,d2,prov:prov||null,busca:busca||null});
+      if(error) throw error;
+      return { cols:[
+        {k:'fecha',t:'Fecha',tipo:'f'},
+        {k:'factura',t:'Factura',tipo:'c'},
+        {k:'proveedor',t:'Proveedor'},
+        {k:'detalle',t:'Artículo'},
+        {k:'cantidad',t:'Cant.',tipo:'n'},
+        {k:'unidad',t:'Unid.'},
+        {k:'precio',t:'P. unitario',tipo:'m'},
+        {k:'total',t:'Total',tipo:'m'}],
+        filas:data||[], totales:['total'],
+        aviso:(data||[]).length >= 3000
+          ? 'Se muestran las primeras 3000 líneas. Afiná el filtro para ver el resto.' : null };
+    }},
+
+  { id:'pagos-cuenta', n:'Pagos por cuenta bancaria',
+    d:'Cuánto salió por cada cuenta en el rango y cuántos comprobantes se registraron.',
+    fechas:true,
+    run: async (d1,d2) => {
+      const {data,error} = await sb.rpc('rpt_pagos_cuenta',{d1,d2});
+      if(error) throw error;
+      return { cols:[
+        {k:'cuenta',t:'Cuenta'},
+        {k:'comprobantes',t:'Comprobantes',tipo:'n'},
+        {k:'facturas',t:'Facturas cubiertas',tipo:'n'},
+        {k:'monto',t:'Monto',tipo:'m',barra:true}],
+        filas:data||[], totales:['comprobantes','facturas','monto'] };
+    }},
+
+  { id:'estado-cuenta', n:'Estado de cuenta de un proveedor',
+    d:'Facturas, notas de crédito y pagos de un proveedor en orden de fecha. Las facturas van como cargo y las notas y pagos como abono.',
+    fechas:true, prov:'requerido',
+    run: async (d1,d2,prov) => {
+      const {data,error} = await sb.rpc('rpt_estado_cuenta',{prov:Number(prov),d1,d2});
+      if(error) throw error;
+      return { cols:[
+        {k:'fecha',t:'Fecha',tipo:'f'},
+        {k:'tipo',t:'Movimiento'},
+        {k:'documento',t:'Documento',tipo:'c'},
+        {k:'cargo',t:'Cargo',tipo:'m'},
+        {k:'abono',t:'Abono',tipo:'m'},
+        {k:'saldo_actual',t:'Saldo hoy',tipo:'m'}],
+        filas:data||[], totales:['cargo','abono'] };
+    }},
+
+  { id:'notas-credito', n:'Notas de crédito del periodo',
+    d:'Todas las notas recibidas en el rango, con la factura a la que se aplicaron y cuáles siguen sin aplicar.',
+    fechas:true,
+    run: async (d1,d2) => {
+      const {data,error} = await sb.rpc('rpt_notas_credito',{d1,d2});
+      if(error) throw error;
+      return { cols:[
+        {k:'fecha',t:'Fecha',tipo:'f'},
+        {k:'numero',t:'Nota',tipo:'c'},
+        {k:'proveedor',t:'Proveedor'},
+        {k:'factura',t:'Factura',tipo:'c'},
+        {k:'razon',t:'Razón'},
+        {k:'estado',t:'Estado'},
+        {k:'monto',t:'Monto',tipo:'m'}],
+        filas:data||[], totales:['monto'] };
+    }},
+
+  { id:'iva', n:'Resumen de IVA de compras',
+    d:'Subtotal, impuesto y total por mes. Es el corte que se coteja con el contador.',
+    fechas:true,
+    run: async (d1,d2) => {
+      const {data,error} = await sb.rpc('rpt_iva',{d1,d2});
+      if(error) throw error;
+      return { cols:[
+        {k:'mes',t:'Mes'},
+        {k:'facturas',t:'Facturas',tipo:'n'},
+        {k:'proveedores',t:'Proveedores',tipo:'n'},
+        {k:'subtotal',t:'Subtotal',tipo:'m'},
+        {k:'impuesto',t:'IVA',tipo:'m'},
+        {k:'total',t:'Total',tipo:'m',barra:true}],
+        filas:data||[], totales:['facturas','subtotal','impuesto','total'] };
+    }}
+];
+
+function abrirReportes(){
+  $('#rep-tipos').innerHTML = REPORTES.map(r =>
+    `<div class="rep-i" data-rep="${r.id}" aria-current="${RP.sel===r.id}">
+       <div class="n">${esc(r.n)}</div><div class="d">${esc(r.d.split('.')[0])}.</div></div>`).join('');
+  $('#rep-tipos').querySelectorAll('[data-rep]').forEach(d =>
+    d.onclick = () => { RP.sel = d.dataset.rep; abrirReportes(); });
+
+  $('#rep-prov').innerHTML = '<option value="">Todos</option>' +
+    PROVEEDORES.map(p => `<option value="${p.id}">${p.id}  ${esc(p.nombre)}</option>`).join('');
+
+  if(!$('#rep-d1').value){
+    const hoy = hoyISO();
+    $('#rep-d1').value = hoy.slice(0,8) + '01';
+    $('#rep-d2').value = hoy;
+  }
+
+  const r = REPORTES.find(x => x.id === RP.sel);
+  $('#rep-nom').textContent = r ? r.n : 'elegí un reporte';
+  $('#rep-desc').textContent = r ? r.d : 'Seleccioná un reporte de la lista para ver sus opciones.';
+  $('#rep-w1').classList.toggle('hide', !r || !r.fechas);
+  $('#rep-w2').classList.toggle('hide', !r || !r.fechas);
+  $('#rep-wp').classList.toggle('hide', !r || !r.prov);
+  $('#rep-wb').classList.toggle('hide', !r || !r.busca);
+  if(r && r.prov === 'requerido'){
+    $('#rep-prov').querySelector('option[value=""]').textContent = '— Elegí uno —';
+  } else if(r && r.prov){
+    $('#rep-prov').querySelector('option[value=""]').textContent = 'Todos';
+  }
+  $('#rep-run').disabled = !r;
+}
+
+async function ejecutarReporte(){
+  const r = REPORTES.find(x => x.id === RP.sel);
+  if(!r) return;
+  const d1 = $('#rep-d1').value, d2 = $('#rep-d2').value;
+  const prov = $('#rep-prov').value, busca = $('#rep-busca').value.trim();
+  if(r.fechas && (!d1 || !d2)) return toast('Definí el rango de fechas');
+  if(r.fechas && d1 > d2)      return toast('La fecha inicial es posterior a la final');
+  if(r.prov === 'requerido' && !prov) return toast('Este reporte necesita un proveedor');
+
+  const btn = $('#rep-run'); btn.disabled = true; btn.textContent = 'Ejecutando…';
+  $('#rep-out').innerHTML = '<div class="empty">Calculando…</div>';
+  try{
+    RP.res = await r.run(d1, d2, prov, busca);
+    RP.res.titulo = r.n;
+    RP.res.rango  = r.fechas ? `${fdate(d1)} al ${fdate(d2)}` : 'a hoy';
+    pintarReporte();
+    $('#rep-xls').disabled = !RP.res.filas.length;
+    $('#rep-cnt').textContent = `${RP.res.filas.length} fila${RP.res.filas.length===1?'':'s'}`;
+  }catch(e){
+    $('#rep-out').innerHTML = '<div class="empty">No se pudo ejecutar: ' + esc(e.message) + '</div>';
+    $('#rep-xls').disabled = true; $('#rep-cnt').textContent = '';
+  }
+  btn.disabled = false; btn.textContent = 'Ejecutar';
+}
+
+const celda = (v, tipo) => {
+  if(v === null || v === undefined || v === '') return {txt:'—', cls:'dl'};
+  if(tipo === 'm') return {txt: money(v), cls:'r num'};
+  if(tipo === 'n') return {txt: Number(v).toLocaleString('es-CR'), cls:'r num'};
+  if(tipo === 'f') return {txt: fdate(String(v).slice(0,10)), cls:'num'};
+  if(tipo === 'c') return {txt: String(v), cls:'mono'};
+  if(tipo === 'v'){
+    const x = Number(v);
+    return {txt:`<span class="delta ${x>0.5?'d-up':(x<-0.5?'d-dn':'d-eq')}">${x>0?'+':''}${x.toFixed(1)}%</span>`,
+            cls:'r', crudo:true};
+  }
+  return {txt: String(v), cls:''};
+};
+
+function pintarReporte(){
+  const R = RP.res, cont = $('#rep-out');
+  if(!R.filas.length){ cont.innerHTML = '<div class="empty">El reporte no devolvió datos para ese rango.</div>'; return; }
+
+  const colBarra = R.cols.find(c => c.barra);
+  const maxBarra = colBarra ? Math.max(...R.filas.map(f => Number(f[colBarra.k]) || 0), 1) : 1;
+
+  const tot = {};
+  R.totales.forEach(k => tot[k] = R.filas.reduce((a,f) => a + (Number(f[k]) || 0), 0));
+
+  cont.innerHTML = `
+    ${R.aviso ? `<div class="note warn" style="margin-bottom:12px">${esc(R.aviso)}</div>` : ''}
+    <div class="tbl"><table class="dtable">
+      <thead><tr>${R.cols.map(c =>
+        `<th class="${['m','n','v'].includes(c.tipo)?'r':''}">${esc(c.t)}</th>`).join('')}</tr></thead>
+      <tbody>${R.filas.map(f => `<tr>${R.cols.map(c => {
+          const x = celda(f[c.k], c.tipo);
+          const barra = (c.barra && Number(f[c.k]) > 0)
+            ? `<div class="rbar"><i style="width:${Math.max(2, Number(f[c.k])/maxBarra*100)}%"></i></div>` : '';
+          return `<td class="${x.cls}">${x.crudo ? x.txt : esc(x.txt)}${barra}</td>`;
+        }).join('')}</tr>`).join('')}
+        ${R.totales.length ? `<tr class="rtot">${R.cols.map((c,i) => {
+          if(i === 0) return `<td>Total · ${R.filas.length} filas</td>`;
+          if(!R.totales.includes(c.k)) return '<td></td>';
+          const x = celda(tot[c.k], c.tipo);
+          return `<td class="${x.cls}">${esc(x.txt)}</td>`;
+        }).join('')}</tr>` : ''}
+      </tbody></table></div>`;
+}
+
+function exportarReporte(){
+  const R = RP.res;
+  if(!R || !R.filas.length) return;
+  const F = 'Calibri';
+  const celdas = {}, merges = [];
+  const set = (r,c,v,st,z) => {
+    const cel = (typeof v === 'number') ? {v,t:'n'} : {v: v==null?'':String(v), t:'s'};
+    if(z) cel.z = z;
+    cel.s = Object.assign({font:{name:F, sz:11}}, st||{});
+    celdas[r+','+c] = cel;
+  };
+  const nc = R.cols.length;
+  set(0,0,'PROFECHA',{font:{name:'Times New Roman',sz:20,bold:true},
+    alignment:{horizontal:'center',vertical:'center'},
+    fill:{fgColor:{rgb:'CCFFCC'},patternType:'solid'}});
+  for(let c=1;c<nc;c++) set(0,c,'',{fill:{fgColor:{rgb:'CCFFCC'},patternType:'solid'}});
+  merges.push({s:{r:0,c:0},e:{r:0,c:nc-1}});
+  set(1,0,`${R.titulo} · ${R.rango}`,{font:{name:F,sz:11,bold:true}});
+  merges.push({s:{r:1,c:0},e:{r:1,c:nc-1}});
+
+  const hdr = {font:{name:F,sz:10,bold:true,color:{rgb:'404040'}},
+               border:{bottom:{style:'thin',color:{rgb:'000000'}}}};
+  R.cols.forEach((c,i) => set(3,i,c.t, Object.assign({},hdr,
+    {alignment:{horizontal:['m','n','v'].includes(c.tipo)?'right':'left'}})));
+
+  R.filas.forEach((f,ri) => R.cols.forEach((c,ci) => {
+    const v = f[c.k];
+    if(c.tipo === 'm' || c.tipo === 'n' || c.tipo === 'v')
+      set(4+ri, ci, v==null?0:Number(v), {font:{name:F,sz:10}},
+          c.tipo === 'm' ? '#,##0.00' : (c.tipo === 'v' ? '0.0"%"' : '#,##0'));
+    else if(c.tipo === 'f' && v){
+      const [y,m,d] = String(v).slice(0,10).split('-').map(Number);
+      set(4+ri, ci, (Date.UTC(y,m-1,d) - Date.UTC(1899,11,30))/86400000,
+          {font:{name:F,sz:10},alignment:{horizontal:'center'}}, 'dd/mm/yyyy');
+    } else set(4+ri, ci, v==null?'':String(v), {font:{name:F,sz:10}});
+  }));
+
+  if(R.totales.length){
+    const rt = 4 + R.filas.length;
+    const st = {font:{name:F,sz:11,bold:true},border:{top:{style:'thin',color:{rgb:'000000'}}}};
+    R.cols.forEach((c,i) => {
+      if(i === 0) set(rt,i,'Total',st);
+      else if(R.totales.includes(c.k))
+        set(rt,i, R.filas.reduce((a,f)=>a+(Number(f[c.k])||0),0), st,
+            c.tipo === 'm' ? '#,##0.00' : '#,##0');
+      else set(rt,i,'',st);
+    });
+  }
+
+  const ws = {};
+  Object.entries(celdas).forEach(([k,cel]) => {
+    const [r,c] = k.split(',').map(Number);
+    ws[XLSX.utils.encode_cell({r,c})] = cel;
+  });
+  ws['!ref']    = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:5+R.filas.length,c:nc-1}});
+  ws['!merges'] = merges;
+  ws['!cols']   = R.cols.map(c => ({wch: c.tipo === 'm' ? 16 : (c.k === 'detalle' || c.k === 'proveedor' ? 34 : 14)}));
+  ws['!rows']   = [{hpt:30},{hpt:18},{hpt:8},{hpt:18}];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, R.titulo.slice(0,28));
+  XLSX.writeFile(wb, `${R.titulo.replace(/[^\wáéíóúñÁÉÍÓÚÑ ]/g,'').replace(/ /g,'_')}_${hoyISO()}.xlsx`);
+  toast('Reporte exportado','ok');
+}
+
+$('#rep-run').onclick = ejecutarReporte;
+$('#rep-xls').onclick = exportarReporte;
+
+let DIARIO = null, redibujo = null;
+addEventListener('resize', () => {
+  clearTimeout(redibujo);
+  redibujo = setTimeout(() => {
+    if(DIARIO && !$('#mod-inicio').classList.contains('hide'))
+      graficoLineas($('#in-dia'), DIARIO.labels, DIARIO.series);
+  }, 180);
+});
+
 /* ---------- Navegación entre módulos ---------- */
 
 
 
 
-const MODULOS = ['inicio','recepcion','flujo','pagos','proveedores','precios','consultas'];
+const MODULOS = ['inicio','recepcion','flujo','pagos','proveedores','precios','consultas','reportes'];
 function irA(m){
   document.querySelectorAll('[data-mod]').forEach(x =>
     x.setAttribute('aria-current', x.dataset.mod === m ? 'true' : 'false'));
@@ -2621,6 +3209,7 @@ function irA(m){
   if(m === 'proveedores') abrirProveedores();
   if(m === 'precios')     llenarSelectProveedores();
   if(m === 'consultas')   abrirConsultas();
+  if(m === 'reportes')    abrirReportes();
 }
 document.querySelectorAll('[data-mod]').forEach(b => b.onclick = () => irA(b.dataset.mod));
 
