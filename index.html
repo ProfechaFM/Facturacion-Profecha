@@ -1874,12 +1874,7 @@ let PV = { resumen:{}, abierto:null };
 async function abrirProveedores(){
   const [res, cred] = await Promise.all([
     sb.from('v_proveedor_resumen').select('*'),
-    sb.from('v_credito_proveedor').select('*'),
-    sb.from('v_pagos_dia').select('*').gte('fecha', hoy.slice(0,4)+'-01-01'),
-    sb.from('v_resumen_mensual').select('*'),
-    sb.from('notas_credito').select('fecha_emision,monto')
-      .gte('fecha_emision', hoy.slice(0,7)+'-01'),
-    sb.from('v_antiguedad').select('rango,saldo')
+    sb.from('v_credito_proveedor').select('*')
   ]);
   PV.resumen = {}; (res.data||[]).forEach(r => PV.resumen[r.id] = r);
   (cred.data||[]).forEach(c => {
@@ -2279,7 +2274,12 @@ async function cargarInicio(){
     sb.from('facturas').select('fecha_emision,monto,proveedor_id').eq('anulada',false)
       .gte('fecha_emision', new Date(Date.now()-365*86400000).toISOString().slice(0,10)),
     sb.from('v_nc_huerfanas').select('*').order('fecha_emision'),
-    sb.from('v_credito_proveedor').select('*')
+    sb.from('v_credito_proveedor').select('*'),
+    sb.from('v_pagos_dia').select('*').gte('fecha', hoy.slice(0,4)+'-01-01'),
+    sb.from('v_resumen_mensual').select('*'),
+    sb.from('notas_credito').select('fecha_emision,monto')
+      .gte('fecha_emision', hoy.slice(0,7)+'-01'),
+    sb.from('v_antiguedad').select('rango,saldo')
   ]);
 
   pintarHuerfanas(huerfanas.data || []);
